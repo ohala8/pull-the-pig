@@ -29,6 +29,12 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xf3c18e, 30, 190);
 const camera = new THREE.PerspectiveCamera(78, 1, 0.05, 1200);
 camera.rotation.order = 'YXZ';
+// ---------- player settings (saved per browser) ----------
+const SETTINGS_KEY = 'ptp-settings';
+const DEFAULT_SETTINGS = { sens: 1, vol: 0.7, fov: 78 };
+const settings = Object.assign({}, DEFAULT_SETTINGS, (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; } })());
+function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* storage unavailable */ } }
+camera.fov = settings.fov;
 scene.add(camera);
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -394,7 +400,7 @@ function initAudio() {
   if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
   try {
     AC = new (window.AudioContext || window.webkitAudioContext)();
-    master = AC.createGain(); master.gain.value = 0.32; master.connect(AC.destination);
+    master = AC.createGain(); master.gain.value = 0.45 * settings.vol; master.connect(AC.destination);
     noiseBuf = AC.createBuffer(1, AC.sampleRate, AC.sampleRate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   } catch (e) { AC = null; }
@@ -695,7 +701,7 @@ function botThink(b, dt) {
 // ---------- input ----------
 const keys = {};
 let locked = false, dragMode = false, dragging = false, breathAnim = 0, recoil = 0;
-const SENS = 0.0022;
+const SENS = 0.0022; // base sensitivity, scaled by the Settings slider
 addEventListener('keydown', (e) => {
   if (['Space', 'Tab', 'ShiftLeft', 'ShiftRight'].includes(e.code)) e.preventDefault();
   if (keys[e.code]) return; keys[e.code] = true;
@@ -715,8 +721,9 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 document.addEventListener('mousemove', (e) => {
   if (game.state !== 'playing') return;
   if (!locked && !(dragMode && dragging)) return;
-  player.yaw -= e.movementX * SENS;
-  player.pitch = Math.max(-1.45, Math.min(1.45, player.pitch - e.movementY * SENS));
+  const s = SENS * settings.sens;
+  player.yaw -= e.movementX * s;
+  player.pitch = Math.max(-1.45, Math.min(1.45, player.pitch - e.movementY * s));
 });
 canvas.addEventListener('mousedown', () => { dragging = true; if (game.state === 'playing' && !locked && !dragMode) lockPointer(); });
 addEventListener('mouseup', (e) => { dragging = false; if (e.button === 3 || e.button === 4) e.preventDefault(); });
@@ -935,6 +942,37 @@ $('play').addEventListener('click', startGame);
 $('again').addEventListener('click', startGame);
 $('resume').addEventListener('click', resumeGame);
 $('quit').addEventListener('click', toMenu);
+
+// ---------- settings + how to play screens ----------
+let settingsFrom = 'menu';
+const SLIDERS = {
+  sens: { el: 's-sens', out: 'o-sens', fmt: (v) => v.toFixed(2) + '×' },
+  vol: { el: 's-vol', out: 'o-vol', fmt: (v) => Math.round(v * 100) + '%' },
+  fov: { el: 's-fov', out: 'o-fov', fmt: (v) => Math.round(v) + '°' }
+};
+function applySettings() {
+  camera.fov = settings.fov; camera.updateProjectionMatrix();
+  if (master) master.gain.value = 0.45 * settings.vol;
+  for (const [k, c] of Object.entries(SLIDERS)) { $(c.el).value = settings[k]; $(c.out).textContent = c.fmt(settings[k]); }
+}
+let volBeep = 0;
+for (const [k, c] of Object.entries(SLIDERS)) {
+  $(c.el).addEventListener('input', () => {
+    settings[k] = +$(c.el).value; applySettings(); saveSettings();
+    if (k === 'vol') { initAudio(); clearTimeout(volBeep); volBeep = setTimeout(() => sfx.clank(), 120); }
+  });
+}
+function openSettings(from) { settingsFrom = from; $(from).hidden = true; applySettings(); $('settings').hidden = false; $('s-sens').focus(); }
+function closeSettings() { $('settings').hidden = true; $(settingsFrom).hidden = false; }
+$('msettings').addEventListener('click', () => openSettings('menu'));
+$('psettings').addEventListener('click', () => openSettings('pause'));
+$('sdone').addEventListener('click', closeSettings);
+$('sreset').addEventListener('click', () => { Object.assign(settings, DEFAULT_SETTINGS); applySettings(); saveSettings(); });
+function openHowto() { $('howto').hidden = false; $('hdone').focus(); }
+$('mhowto').addEventListener('click', openHowto);
+$('hdone').addEventListener('click', () => { $('howto').hidden = true; try { localStorage.setItem('ptp-seen-howto', '1'); } catch (e) { /* storage unavailable */ } });
+applySettings();
+try { if (!localStorage.getItem('ptp-seen-howto')) openHowto(); } catch (e) { openHowto(); }
 
 // ---------- main loop ----------
 function update(dt) {

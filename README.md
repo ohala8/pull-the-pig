@@ -73,7 +73,10 @@ To run the production version locally: `npm run build`, then `npm start`, then o
 
 ## Roadmap
 
-1. **Server-run gameplay:** move the game rules to the server so it decides hooks, shoves, deflects and kills.
-2. **Lag handling:** client-side prediction for your own pig, interpolation for other pigs, and rewinding to check hooks against what the thrower saw.
-3. **Rooms:** room codes, bots that fill empty slots, and a match flow (first to N, then a rematch).
-4. **Deploy:** host it and playtest with friends.
+Done: online play on Render, online combat (hooks, flicks, shoves, deflects, kills, first-to-15 rounds), and settings for mouse sensitivity, volume and field of view, plus a How to play screen.
+
+Next:
+1. **Rooms:** "Create room" and "Join with code", plus an end-of-round scoreboard screen.
+2. **Bots online:** server-run bots that fill empty slots and step aside as real players join.
+3. **Fairer netcode:** move more of the rules onto the server, with lag compensation for hooks.
+4. **Extras:** custom domain, an always-on server plan, and new mechanics (gas burst escape, kill streaks).

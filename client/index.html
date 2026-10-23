@@ -77,6 +77,20 @@ html,body{height:100%;margin:0;overflow:hidden;background:#2a1d17;color:var(--in
 .seg button[aria-pressed="true"]{background:var(--hog);color:#2a1206;border-color:var(--hog)}
 .txt{font:700 16px var(--body);color:var(--ink);background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.25);padding:6px 10px;width:12em;transform:skewX(-10deg)}
 .txt:focus-visible{outline:3px solid #fff;outline-offset:2px}
+#howto,#settings{background:rgba(22,12,8,.94)}
+.row2{display:flex;flex-wrap:wrap;gap:14px 18px;align-items:center}
+.ghost{font:800 18px var(--display);text-transform:uppercase;letter-spacing:.06em;color:var(--ink);background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.3);padding:8px 18px;transform:skewX(-10deg);cursor:pointer}
+.ghost:hover{background:rgba(0,0,0,.6);border-color:var(--hog)}
+.ghost:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.setlist{display:grid;gap:14px;background:var(--shade);padding:16px;border-left:4px solid var(--hog)}
+.set{display:grid;grid-template-columns:minmax(0,11em) minmax(0,1fr) 4.5em;gap:12px;align-items:center}
+.set label{font:800 15px var(--display);letter-spacing:.08em;text-transform:uppercase;color:#ffd36a}
+.set input{width:100%;accent-color:var(--hog)}
+.set output{font:800 18px var(--display);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.set{grid-template-columns:1fr 4em}.set label{grid-column:1/-1}}
+.tips{margin:0;padding:14px 16px 14px 34px;display:grid;gap:10px;background:var(--shade);border-left:4px solid var(--gas);font-size:15px;line-height:1.45}
+.tips b{color:#ffd36a}
+kbd{font-family:var(--display);font-weight:800;background:#3d2a20;border:1px solid rgba(255,255,255,.25);border-bottom-width:2px;border-radius:3px;padding:0 5px}
 .go{justify-self:start;font:800 28px var(--display);text-transform:uppercase;letter-spacing:.06em;color:#2a1206;background:var(--hog);border:0;padding:10px 34px;transform:skewX(-10deg);cursor:pointer;box-shadow:0 4px 0 #a2431a}
 .go:hover{filter:brightness(1.08)} .go:active{transform:skewX(-10deg) translateY(3px);box-shadow:0 1px 0 #a2431a}
 button:focus-visible{outline:3px solid #fff;outline-offset:2px}
@@ -141,7 +155,7 @@ table.sb td.n{text-align:right;font-variant-numeric:tabular-nums}
       <div class="opt"><label id="tl">First to</label><div class="seg" role="group" aria-labelledby="tl" id="tgt">
         <button type="button" data-v="10">10</button><button type="button" data-v="15" aria-pressed="true">15</button><button type="button" data-v="25">25</button></div></div>
     </div>
-    <button class="go" id="play" type="button">Play</button>
+    <div class="row2"><button class="go" id="play" type="button">Play</button><button class="ghost" id="msettings" type="button">Settings</button><button class="ghost" id="mhowto" type="button">How to play</button></div>
     <p class="note" id="mnote">Click Play to lock the mouse. Press Esc to pause.</p>
   </div>
 </div>
@@ -150,6 +164,7 @@ table.sb td.n{text-align:right;font-variant-numeric:tabular-nums}
   <div class="panel" style="justify-items:start">
     <h2 class="title" style="font-size:72px">Paused</h2>
     <button class="go" id="resume" type="button">Resume</button>
+    <button class="ghost" id="psettings" type="button">Settings</button>
     <button class="go" id="quit" type="button" style="font-size:20px;background:#5a3b2b;color:var(--ink);box-shadow:0 4px 0 #2a1a12">Quit to menu</button>
   </div>
 </div>
@@ -159,6 +174,34 @@ table.sb td.n{text-align:right;font-variant-numeric:tabular-nums}
     <h2 class="title" style="font-size:clamp(48px,11vw,92px)" id="owin"></h2>
     <table class="sb" id="otable"></table>
     <button class="go" id="again" type="button">Play again</button>
+  </div>
+</div>
+<div class="ov" id="settings" hidden>
+  <div class="panel">
+    <h2 class="title" style="font-size:clamp(44px,10vw,80px)">Settings</h2>
+    <div class="setlist">
+      <div class="set"><label for="s-sens">Mouse sensitivity</label><input type="range" id="s-sens" min="0.2" max="3" step="0.05"><output id="o-sens" for="s-sens"></output></div>
+      <div class="set"><label for="s-vol">Volume</label><input type="range" id="s-vol" min="0" max="1" step="0.05"><output id="o-vol" for="s-vol"></output></div>
+      <div class="set"><label for="s-fov">Field of view</label><input type="range" id="s-fov" min="60" max="110" step="1"><output id="o-fov" for="s-fov"></output></div>
+    </div>
+    <p class="note">Saved in this browser. Higher field of view shows more of the courtyard; lower makes pigs look bigger.</p>
+    <div class="row2"><button class="go" id="sdone" type="button">Done</button><button class="ghost" id="sreset" type="button">Reset to defaults</button></div>
+  </div>
+</div>
+
+<div class="ov" id="howto" hidden>
+  <div class="panel">
+    <h2 class="title" style="font-size:clamp(44px,10vw,80px)">How to <em>play</em></h2>
+    <p class="sub">Push other pigs into the pit in the middle. Every pig you hook or shove in counts as your elimination. The first to the target wins.</p>
+    <ol class="tips">
+      <li><b>Hook from the rim.</b> Stand at the edge, aim across the pit and press <kbd>Shift</kbd>. Your hook pulls the pig to just in front of you, so if you're at the rim, it drops right into the hole.</li>
+      <li><b>Flick it in.</b> Right after your hook lands, turn quickly. The pig gets dragged toward where you're facing, which helps when it's beside you instead of across the pit.</li>
+      <li><b>Shove up close.</b> <kbd>V</kbd> or mouse button 4 swipes your hook and knocks a nearby pig back. Push pigs standing at the rim over the edge.</li>
+      <li><b>Deflect hooks.</b> Swing your shove into an incoming hook just before it reaches you. It bounces back and the thrower is stunned. Miss, and you're stuck mid-swing.</li>
+      <li><b>Breathe out of the pit.</b> Got pulled in? Press <kbd>E</kbd> fast. Your breathing mask launches you upward, and you can steer back over the rim. It has a 7-second cooldown.</li>
+    </ol>
+    <p class="note">Move with <kbd>WASD</kbd>, jump with <kbd>Space</kbd>, hold <kbd>Tab</kbd> for scores, <kbd>Esc</kbd> to pause.</p>
+    <div class="row2"><button class="go" id="hdone" type="button">Got it</button></div>
   </div>
 </div>
 <script type="module" src="/src/main.js"></script>
