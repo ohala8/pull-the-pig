@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pull The Pig</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;800&family=Barlow:wght@500;700&display=swap">
+<style>
+/* Layout: full-bleed WebGL arena, HUD pinned to corners like a hero shooter, menus as slanted panels over a live attract-mode scene. Single sunset look by choice. */
+:root{
+  --ink:#fff7ec;
+  --shade:rgba(24,14,10,.72);
+  --hog:#ff9a3c;
+  --gas:#7dff4a;
+  --stun:#ff3b3b;
+  --ally:#3cc7ff;
+  --display:"Saira Condensed","Arial Narrow",Impact,sans-serif;
+  --body:Barlow,"Segoe UI",system-ui,sans-serif;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:hidden;background:#2a1d17;color:var(--ink);font-family:var(--body)}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;outline:none}
+.hud{position:fixed;pointer-events:none;text-shadow:0 1px 2px rgba(0,0,0,.7)}
+.slant{font-family:var(--display);font-weight:800;text-transform:uppercase;letter-spacing:.04em;transform:skewX(-10deg)}
+#abil{top:calc(14px + env(safe-area-inset-top,0px));left:calc(16px + env(safe-area-inset-left,0px));display:grid;gap:4px;font-size:15px}
+#abil div{display:flex;gap:8px;align-items:center}
+#abil kbd{font-family:var(--display);font-weight:800;background:var(--shade);border:1px solid rgba(255,255,255,.25);border-radius:3px;padding:0 6px;font-size:13px;min-width:20px;text-align:center}
+#abil .g{color:var(--gas)} #abil .o{color:var(--hog)}
+#score{top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);display:grid;gap:3px;justify-items:center}
+#score .cap{font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:.08em;background:var(--shade);padding:2px 14px;transform:skewX(-10deg);color:#ffd36a}
+.row{display:grid;grid-template-columns:28px 150px 40px;align-items:center;font-family:var(--display);font-weight:800;font-size:16px;transform:skewX(-10deg)}
+.row span{padding:1px 8px}
+.row .rk{text-align:center;background:rgba(0,0,0,.55)}
+.row.lead span:not(.rk){background:#c8262b}
+.row.me span:not(.rk){background:#1f8fc4}
+.row .n{text-align:right;font-variant-numeric:tabular-nums}
+#feed{top:calc(14px + env(safe-area-inset-top,0px));right:calc(16px + env(safe-area-inset-right,0px));display:grid;gap:4px;justify-items:end;font-size:14px}
+#feed div{background:var(--shade);padding:3px 10px;border-radius:2px;animation:fin .2s ease-out}
+#feed b.me{color:var(--ally)} #feed b{color:#ff8f8f}
+#feed .pit{color:var(--gas);font-family:var(--display);font-weight:800;margin:0 6px}
+@keyframes fin{from{opacity:0;transform:translateX(20px)}}
+#xh{left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border:2px solid rgba(255,255,255,.85);border-radius:50%;box-shadow:0 0 3px rgba(0,0,0,.6)}
+#xh::after{content:"";position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px;border-radius:50%;background:#fff}
+#banner{left:0;right:0;top:20%;text-align:center;font-size:clamp(44px,8vw,86px);color:var(--stun);font-family:var(--display);font-weight:800;font-style:italic;letter-spacing:.02em;text-shadow:0 0 12px rgba(0,0,0,.6),0 3px 0 #6b0d0d}
+#toasts{left:0;right:0;top:58%;display:grid;gap:2px;justify-items:center;font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:.05em}
+#toasts div{animation:tup 1.6s ease-out forwards}
+#toasts .k{color:var(--hog);font-size:24px}
+@keyframes tup{0%{opacity:0;transform:translateY(8px) scale(1.2)}12%{opacity:1;transform:none}75%{opacity:1}100%{opacity:0;transform:translateY(-14px)}}
+#cds{bottom:calc(22px + env(safe-area-inset-bottom,0px));right:calc(22px + env(safe-area-inset-right,0px));display:flex;gap:14px}
+.cd{width:66px;display:grid;justify-items:center;gap:4px}
+.cd .ring{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--c) calc(var(--p)*1turn),rgba(0,0,0,.55) 0);box-shadow:0 0 0 2px rgba(255,255,255,.3)}
+.cd .in{width:46px;height:46px;border-radius:50%;background:rgba(20,12,8,.85);display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:20px}
+.cd .lbl{font-family:var(--display);font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
+.cd.ready .ring{box-shadow:0 0 0 2px var(--c),0 0 14px var(--c)}
+#hookcd{--c:var(--hog)} #breathcd{--c:var(--gas)}
+#you{bottom:calc(22px + env(safe-area-inset-bottom,0px));left:calc(22px + env(safe-area-inset-left,0px));font-family:var(--display);font-weight:800;font-size:22px;transform:skewX(-10deg)}
+#you small{display:block;font-size:13px;color:#ffd36a;letter-spacing:.08em}
+#gasfx{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(125,255,74,.45));opacity:0;transition:opacity .5s}
+#hurtfx{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 40%,rgba(255,40,40,.5));opacity:0;transition:opacity .3s}
+.ov{position:fixed;inset:0;display:flex;overflow-y:auto;background:radial-gradient(ellipse at center,rgba(30,16,10,.35),rgba(20,10,6,.8));padding:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.panel{width:min(560px,100%);display:grid;gap:18px;margin:auto}
+@media (max-height:700px){.title{font-size:clamp(44px,9vh,70px)!important}.panel{gap:12px}.keys{padding:10px 14px;gap:5px 12px}}
+.title{font-family:var(--display);font-weight:800;font-size:clamp(56px,13vw,112px);line-height:.85;margin:0;transform:skewX(-10deg);text-transform:uppercase;color:var(--ink);text-shadow:0 4px 0 #a2431a,0 8px 22px rgba(0,0,0,.5)}
+.title em{font-style:normal;color:var(--hog)}
+.sub{margin:0;font-size:16px;line-height:1.5;max-width:46ch;color:#f3dcc6}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;align-items:center;background:var(--shade);padding:14px 16px;border-left:4px solid var(--hog)}
+.keys kbd{font-family:var(--display);font-weight:800;font-size:16px;background:#3d2a20;border:1px solid rgba(255,255,255,.25);border-bottom-width:3px;border-radius:4px;padding:1px 8px;text-align:center;justify-self:start}
+.keys span{font-size:15px}
+.opts{display:flex;flex-wrap:wrap;gap:14px 22px}
+.opt{display:grid;gap:6px}
+.opt label{font-family:var(--display);font-weight:800;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:#ffd36a}
+.seg{display:flex;transform:skewX(-10deg)}
+.seg button{font:800 16px var(--display);text-transform:uppercase;letter-spacing:.05em;color:var(--ink);background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.2);padding:6px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--hog);color:#2a1206;border-color:var(--hog)}
+.txt{font:700 16px var(--body);color:var(--ink);background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.25);padding:6px 10px;width:12em;transform:skewX(-10deg)}
+.txt:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.go{justify-self:start;font:800 28px var(--display);text-transform:uppercase;letter-spacing:.06em;color:#2a1206;background:var(--hog);border:0;padding:10px 34px;transform:skewX(-10deg);cursor:pointer;box-shadow:0 4px 0 #a2431a}
+.go:hover{filter:brightness(1.08)} .go:active{transform:skewX(-10deg) translateY(3px);box-shadow:0 1px 0 #a2431a}
+button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.note{font-size:13px;color:#d9bfa6;margin:0}
+table.sb{border-collapse:collapse;width:100%;font-family:var(--display);font-weight:800;font-size:18px}
+table.sb td{padding:4px 10px;background:rgba(0,0,0,.45);border-bottom:1px solid rgba(255,255,255,.08)}
+table.sb tr.me td{background:rgba(31,143,196,.6)}
+table.sb tr.win td{background:rgba(200,38,43,.7)}
+table.sb td.n{text-align:right;font-variant-numeric:tabular-nums}
+#tabsb{left:50%;top:50%;transform:translate(-50%,-50%);width:min(380px,calc(100% - 32px))}
+#dead{left:0;right:0;top:34%;text-align:center}
+#dead .big{font-family:var(--display);font-weight:800;font-size:clamp(30px,6vw,52px);text-transform:uppercase;transform:skewX(-10deg)}
+#dead .big b{color:var(--stun)}
+#dead .sm{font-size:16px;color:#f3dcc6}
+@media (prefers-reduced-motion:reduce){#feed div,#toasts div{animation:none}}
+</style>
+</head>
+<body>
+<canvas id="c" tabindex="0"></canvas>
+<div id="gasfx"></div><div id="hurtfx"></div>
+
+<div id="hudwrap" hidden>
+  <div class="hud" id="abil">
+    <div><kbd>E</kbd><span class="g slant">Gas power!</span><span>Air jump up</span></div>
+    <div><kbd>⇧</kbd><span class="o slant">Chain hook</span><span>Pull them in</span></div>
+    <div><kbd>V</kbd><span class="slant" style="color:#ffd36a">Shove</span><span>Knockback target</span></div>
+  </div>
+  <div class="hud" id="score"></div>
+  <div class="hud" id="feed"></div>
+  <div class="hud" id="xh"></div>
+  <div class="hud" id="banner" hidden>STUNNED</div>
+  <div class="hud" id="toasts"></div>
+  <div class="hud" id="dead" hidden><div class="big"></div><div class="sm"></div></div>
+  <div class="hud" id="you"></div>
+  <div class="hud" id="cds">
+    <div class="cd" id="breathcd"><div class="ring"><div class="in">E</div></div><div class="lbl">Breath</div></div>
+    <div class="cd" id="hookcd"><div class="ring"><div class="in">⇧</div></div><div class="lbl">Hook</div></div>
+  </div>
+  <div class="hud" id="tabsb" hidden></div>
+</div>
+
+<div class="ov" id="menu">
+  <div class="panel">
+    <h1 class="title">Pull<br>the <em>Pig</em></h1>
+    <p class="sub">Twelve hogs, one hole. Stand at the rim, hook a pig from across the pit and drag it in. First pig to the target eliminations wins.</p>
+    <div class="keys">
+      <kbd>WASD</kbd><span>Move</span>
+      <kbd>Space</kbd><span>Jump</span>
+      <kbd>Shift</kbd><span>Chain hook: throw it at the crosshair and pull whoever it hits. Turn quickly right after it lands to drag them sideways, like into the pit.</span>
+      <kbd>E</kbd><span>Breathing mask: one deep breath launches you upward. Use it to climb out of the pit.</span>
+      <kbd>V / Mouse 4</kbd><span>Shove: swipe your hook to knock a pig backward. Push one off the rim and into the pit. Time the swipe into an incoming hook to deflect it and stun the thrower. Miss, and you're stuck mid-swing.</span>
+      <kbd>Mouse</kbd><span>Look around. Hold Tab for the scoreboard.</span>
+    </div>
+    <div class="opts">
+      <div class="opt"><label id="ml">Mode</label><div class="seg" role="group" aria-labelledby="ml" id="mode">
+        <button type="button" data-v="match">Match</button><button type="button" data-v="practice" aria-pressed="true">Practice</button><button type="button" data-v="online">Online</button></div></div>
+      <div class="opt" id="botopt"><label id="bl">Practice bot</label><div class="seg" role="group" aria-labelledby="bl" id="pbot">
+        <button type="button" data-v="dummy" aria-pressed="true">Dummy</button><button type="button" data-v="combat">Combat</button></div></div>
+      <div class="opt" id="onlineopt" hidden><label for="pname">Your name</label><input id="pname" class="txt" maxlength="16" autocomplete="nickname" placeholder="Pig"></div>
+      <div class="opt"><label id="dl">Bot skill</label><div class="seg" role="group" aria-labelledby="dl" id="diff">
+        <button type="button" data-v="easy">Easy</button><button type="button" data-v="normal" aria-pressed="true">Normal</button><button type="button" data-v="hard">Hard</button></div></div>
+      <div class="opt"><label id="tl">First to</label><div class="seg" role="group" aria-labelledby="tl" id="tgt">
+        <button type="button" data-v="10">10</button><button type="button" data-v="15" aria-pressed="true">15</button><button type="button" data-v="25">25</button></div></div>
+    </div>
+    <button class="go" id="play" type="button">Play</button>
+    <p class="note" id="mnote">Click Play to lock the mouse. Press Esc to pause.</p>
+  </div>
+</div>
+
+<div class="ov" id="pause" hidden>
+  <div class="panel" style="justify-items:start">
+    <h2 class="title" style="font-size:72px">Paused</h2>
+    <button class="go" id="resume" type="button">Resume</button>
+    <button class="go" id="quit" type="button" style="font-size:20px;background:#5a3b2b;color:var(--ink);box-shadow:0 4px 0 #2a1a12">Quit to menu</button>
+  </div>
+</div>
+
+<div class="ov" id="over" hidden>
+  <div class="panel">
+    <h2 class="title" style="font-size:clamp(48px,11vw,92px)" id="owin"></h2>
+    <table class="sb" id="otable"></table>
+    <button class="go" id="again" type="button">Play again</button>
+  </div>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
