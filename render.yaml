@@ -1,0 +1,15 @@
+# Render Blueprint: one web service runs the game server and serves the game page.
+# In Render: New > Blueprint, pick this repo, Apply.
+services:
+  - type: web
+    name: pull-the-pig
+    runtime: node
+    region: virginia
+    plan: free
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"

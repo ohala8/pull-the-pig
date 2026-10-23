@@ -40,7 +40,7 @@ Open http://localhost:5173 in two browser windows, pick **Online** on the menu i
 ## How online works right now (version 0.1)
 
 - Everyone joins one shared room called `pig`, with a maximum of 12 players.
-- Each player's browser runs their own pig and sends its position to the server 20 times a second. The server relays it to everyone else, and other pigs are smoothed between updates.
+- Each player's browser runs their own pig and sends its position to the server 30 times a second. The server relays it to everyone else, and other pigs are smoothed between updates.
 - Not yet networked: hooks, shoves, deflects and kills between players. In Online mode you can see and walk around each other, and that's all. Bots are turned off online.
 
 ## Project layout
@@ -56,10 +56,17 @@ server/   the game server (Node + Colyseus)
   src/schema.js  what gets synced for each player
 ```
 
-## Deploying
+## Deploying (Render)
 
-- **Server:** deploy `server/` to any Node host with WebSocket support (Fly.io, Railway, Render or a small VPS). It listens on `PORT`, which defaults to 2567.
-- **Game:** build with `VITE_SERVER_URL=wss://your-server-address npm run build`, then host `client/dist/` on any static host (Netlify, GitHub Pages or itch.io).
+The repo includes `render.yaml`, so Render can set everything up from it. One web service builds the game and runs the server, and the server also serves the game page, so players just open its address.
+
+1. Sign in at https://render.com with GitHub.
+2. Choose **New**, then **Blueprint**, pick `ohala8/pull-the-pig`, and click **Apply**.
+3. When the deploy finishes, open the `https://pull-the-pig-xxxx.onrender.com` address Render shows and choose **Online**.
+
+Every push to `main` redeploys automatically. The free plan sleeps after about 15 minutes with nobody connected, and the first visit after that takes about a minute to wake it up.
+
+To run the production version locally: `npm run build`, then `npm start`, then open http://localhost:2567.
 
 ## Roadmap
 

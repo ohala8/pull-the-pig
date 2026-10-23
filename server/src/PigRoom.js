@@ -11,7 +11,7 @@ class PigRoom extends Room {
   onCreate() {
     this.maxClients = 12;
     this.setState(new PigState());
-    this.setPatchRate(50); // send updates 20 times a second
+    this.setPatchRate(33); // send updates about 30 times a second
 
     this.onMessage('move', (client, m) => {
       const p = this.state.players.get(client.sessionId);

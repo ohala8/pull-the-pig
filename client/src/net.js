@@ -1,11 +1,14 @@
 import * as THREE from 'three';
 import { Client } from 'colyseus.js';
 
-// Where the game server lives. Set VITE_SERVER_URL when you deploy (for example wss://pull-the-pig.fly.dev).
+// Where the game server lives. In development it's port 2567 on this computer.
+// In a production build the server also serves this page, so it's the same address the page came from.
+// VITE_SERVER_URL overrides both (for example if the game page is hosted somewhere else).
+const WS = location.protocol === 'https:' ? 'wss' : 'ws';
 export const SERVER_URL = import.meta.env.VITE_SERVER_URL ||
-  `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.hostname || 'localhost'}:2567`;
+  (import.meta.env.PROD ? `${WS}://${location.host}` : `${WS}://${location.hostname || 'localhost'}:2567`);
 
-const SEND_EVERY = 0.05; // 20 position updates a second
+const SEND_EVERY = 1 / 30; // 30 position updates a second
 
 // ctx: { scene, makePig, makeTag, player, SKINS, PANTS, toast }
 export function createNet(ctx) {
@@ -68,7 +71,7 @@ export function createNet(ctx) {
         const p = ctx.player;
         room.send('move', { x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: p.yaw, anim: animCode(p) });
       }
-      const k = 1 - Math.exp(-dt * 14);
+      const k = 1 - Math.exp(-dt * 20);
       for (const r of remotes.values()) {
         const g = r.m.g, before = g.position.clone();
         // teleports (respawns) snap instead of sliding across the map
