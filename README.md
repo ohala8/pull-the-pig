@@ -37,11 +37,14 @@ This starts two things:
 
 Open http://localhost:5173 in two browser windows, pick **Online** on the menu in both, enter a name and press Play. Each window shows the other pig. Other computers on your network can join at `http://<your-computer's-IP>:5173`.
 
-## How online works right now (version 0.1)
+## How online works right now (version 0.2)
 
-- Everyone joins one shared room called `pig`, with a maximum of 12 players.
-- Each player's browser runs their own pig and sends its position to the server 30 times a second. The server relays it to everyone else, and other pigs are smoothed between updates.
-- Not yet networked: hooks, shoves, deflects and kills between players. In Online mode you can see and walk around each other, and that's all. Bots are turned off online.
+- Everyone joins one shared room called `pig`, with a maximum of 12 players. The first to 15 eliminations wins the round, and scores reset 7 seconds later.
+- **Movement:** each browser runs its own pig and sends its position 30 times a second, so your own movement has no delay. Other pigs are smoothed between updates.
+- **Hooks and shoves:** the thrower's browser decides whether they hit. If it hit on your screen, it hit. The victim's browser then applies the pull, including the flick (it follows the thrower's facing), or the knockback.
+- **Deflects:** the defender's browser decides. If you swing in time on your screen, it counts, with a little extra time allowed for lag.
+- **Kills:** the server credits a kill only if the killer really hooked or shoved the victim in the last 9 seconds. It also checks that hooks and shoves came from a believable distance.
+- **Not yet:** bots in online rooms, room codes, and stopping a modified browser from cheating on its own movement.
 
 ## Project layout
 

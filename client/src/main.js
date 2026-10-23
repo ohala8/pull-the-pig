@@ -359,7 +359,7 @@ function newPig(name, isPlayer, i) {
 }
 const player = newPig('You', true, 0);
 NAMES.forEach((n, i) => newPig(n, false, i));
-const net = createNet({ scene, makePig, makeTag, player, SKINS, PANTS, toast });
+const net = createNet({ scene, makePig, makeTag, makeHookVis, player, SKINS, PANTS, toast, HOOK_SPEED, HOOK_RANGE });
 
 // ---------- first-person viewmodel ----------
 const vm = new THREE.Group(); camera.add(vm);
@@ -479,17 +479,20 @@ function fireHook(p, origin, dir) {
   p.hook = { phase: 'out', pos: origin.clone(), dir: dir.clone().normalize(), dist: 0, target: null };
   p.hookCd = p.isPlayer ? HOOK_CD : rnd(D.cd[0], D.cd[1]);
   sfx.throw(origin);
+  if (p.isPlayer && net.room) { p.hook.id = net.newHookId(); net.send('hook_fire', { id: p.hook.id, o: origin.toArray(), d: p.hook.dir.toArray() }); }
 }
 function breathe(p, wx = 0, wz = 0) {
   if (p.breathCd > 0 || p.state !== 'alive' || p.stunT > 0) return false;
   p.vel.y = BREATH_V; p.vel.x += wx * 4; p.vel.z += wz * 4; p.onGround = false; p.breathCd = BREATH_CD;
   puff(p.pos.clone().add(new V3(0, 0.4, 0)), 0x7dff4a, 10, 1.8); sfx.breath(p.pos);
   if (p.isPlayer) { gasfx.style.opacity = 1; setTimeout(() => gasfx.style.opacity = 0, 350); breathAnim = 0.7; }
+  if (p.isPlayer && net.room) net.send('fx', { k: 'breath', p: p.pos.toArray() });
   return true;
 }
 function meleeTarget(p) {
   const f = fwd(p); let best = null, bd = MELEE_RANGE;
-  for (const q of pigs) {
+  const cands = p.isPlayer && net.room ? pigs.concat(net.proxies()) : pigs;
+  for (const q of cands) {
     if (q === p || q.state !== 'alive' || q.protect > 0) continue;
     const dx = q.pos.x - p.pos.x, dz = q.pos.z - p.pos.z, d = Math.hypot(dx, dz);
     if (d > bd || Math.abs(q.pos.y - p.pos.y) > 2 || d < 0.01) continue;
@@ -501,10 +504,16 @@ function meleeTarget(p) {
 function melee(p) {
   if (p.state !== 'alive' || p.stunT > 0 || p.meleeT > 0) return;
   p.meleeT = MELEE_T; p.meleeHit = false; sfx.swipe(p.pos);
+  if (p.isPlayer && net.room) net.send('fx', { k: 'swipe', p: p.pos.toArray() });
 }
 function meleeStrike(p) {
   const q = meleeTarget(p); if (!q) return;
   const dx = q.pos.x - p.pos.x, dz = q.pos.z - p.pos.z, d = Math.hypot(dx, dz) || 1;
+  if (q.isRemote) {
+    net.send('shove', { to: q.id, d: [dx / d, dz / d] });
+    sfx.thud(q.pos); puff(q.pos.clone().add(new V3(0, 1.4, 0)), 0xfff2d0, 4, 0.9); toast('Shoved ' + q.name);
+    return;
+  }
   q.vel.set(dx / d * SHOVE_V, Math.max(q.vel.y, SHOVE_UP), dz / d * SHOVE_V);
   q.onGround = false; q.knockT = 0.45;
   q.lastHooker = p; q.lastHookT = game.T;
@@ -547,6 +556,7 @@ function releasePull(q) {
   if (!q.pull) return;
   const h = q.pull.hooker;
   if (h.hook && h.hook.target === q) h.hook.phase = 'back';
+  if (q.isPlayer && h.isRemote && q.pull.hookId) net.send('pull_end', { id: q.pull.hookId, to: h.id });
   q.vel.set(q.pull.dir.x * 2, 0, q.pull.dir.z * 2);
   q.state = 'alive'; q.stunT = 0.35; q.pull = null; q.onGround = false;
 }
@@ -557,13 +567,14 @@ function eliminate(v) {
   if (v.mesh) v.mesh.visible = false;
   const k = (v.lastHooker && v.lastHooker !== v && game.T - v.lastHookT < 6 && v.lastHooker.state !== undefined) ? v.lastHooker : null;
   sfx.scream(v.pos);
-  if (k) {
+  if (v.isPlayer && net.room) net.send('died', { by: k && k.isRemote ? k.id : null });
+  else if (k) {
     k.kills++;
     feed(k, v);
     if (k.isPlayer) { toast('Eliminated ' + v.name + '  +100', 'k'); sfx.kill(); }
   } else feed(null, v);
   if (v.isPlayer) showDead(k);
-  if (game.state === 'playing' && k && k.kills >= game.target) endGame(k);
+  if (game.state === 'playing' && !net.room && k && k.kills >= game.target) endGame(k);
 }
 
 // ---------- physics ----------
@@ -584,10 +595,11 @@ function stepBody(p, dt, wx, wz, jump) {
   if (r > OUTER_R - BODY_R) { setR(p, OUTER_R - BODY_R); r = OUTER_R - BODY_R; }
   if (r >= INNER) {
     if (p.pos.y <= 0) { p.pos.y = 0; if (p.vel.y < 0) p.vel.y = 0; p.onGround = true; }
-    if (p.pos.y < CURB_H - 0.01 && r < INNER + BODY_R) setR(p, INNER + BODY_R);
+    const flying = p.knockT > 0 && p.vel.y > 0; // a shoved pig rising off the ground clears the curb
+    if (!flying && p.pos.y < CURB_H - 0.01 && r < INNER + BODY_R) setR(p, INNER + BODY_R);
   } else if (r >= PIT_R) {
     if (p.pos.y <= CURB_H && oldY >= CURB_H - 0.08) { p.pos.y = CURB_H; if (p.vel.y < 0) p.vel.y = 0; p.onGround = true; }
-    else if (p.pos.y < CURB_H) { if (oldR >= INNER - 0.001) setR(p, INNER + BODY_R); else setR(p, PIT_R - BODY_R * 0.5); }
+    else if (p.pos.y < CURB_H && !(p.knockT > 0 && p.vel.y > 0)) { if (oldR >= INNER - 0.001) setR(p, INNER + BODY_R); else setR(p, PIT_R - BODY_R * 0.5); }
   } else if (p.pos.y < CURB_H && r > PIT_R - BODY_R * 0.5) setR(p, PIT_R - BODY_R * 0.5);
 }
 function stepPull(q, dt) {
@@ -773,13 +785,101 @@ function updateHUD(dt) {
   if (player.state === 'dead') $('dead').querySelector('.sm').textContent = 'Respawning in ' + Math.max(0, player.respawnT).toFixed(1) + 's';
   else $('dead').hidden = true;
   hudT -= dt; if (hudT > 0) return; hudT = 0.2;
-  const list = ranked(), lead = list[0], myRank = list.indexOf(player) + 1;
+  const list = net.room ? net.scoreList(player) : ranked();
+  if (!list.includes(player)) list.push(player);
+  const lead = list[0], myRank = list.indexOf(player) + 1;
   const row = (p, rk, cls) => `<div class="row ${cls}"><span class="rk">${rk}</span><span>${esc(p.name)}</span><span class="n">${p.kills}</span></div>`;
   $('score').innerHTML = `<div class="cap">${game.online ? 'Online · ' + net.count() + (net.count() === 1 ? ' pig' : ' pigs') + ' in room' : practiceOn() ? 'Practice · ' + (game.dummy ? 'Dummy' : 'Combat') + ' bot · B to switch' : 'First to ' + game.target}</div>` + (lead === player ? row(player, 1, 'lead') + (list[1] ? row(list[1], 2, '') : '') : row(lead, 1, 'lead') + row(player, myRank, 'me'));
   $('you').innerHTML = `<small>Eliminations</small>${player.kills} / ${game.target}`;
   const tab = $('tabsb'); tab.hidden = !keys.Tab;
   if (keys.Tab) tab.innerHTML = `<table class="sb">${sbRows(list)}</table>`;
 }
+
+// ---------- online combat ----------
+// The thrower's browser decides hooks and shoves; the victim's browser applies them (or answers "deflected").
+const DEFLECT_GRACE_EARLY = 0.08, DEFLECT_GRACE_LATE = 0.14; // extra time for lag when a hit arrives over the network
+const deflectedIds = new Set();
+function onlineHookHit(h, r) {
+  const hk = h.hook;
+  hk.phase = 'pull'; hk.target = r; r.pullingMe = true; r.pullDeadline = performance.now() + 1700;
+  net.send('hook_hit', { id: hk.id, to: r.id });
+  net.send('hook_upd', { id: hk.id, s: 'attach', tgt: r.id });
+  sfx.clank(r.pos); toast('Enemy hooked +10');
+}
+function facing(p, q) {
+  const dx = q.pos.x - p.pos.x, dz = q.pos.z - p.pos.z, d = Math.hypot(dx, dz) || 1, f = fwd(p);
+  return (dx * f.x + dz * f.z) / d;
+}
+function canDeflect(from) {
+  if (player.state !== 'alive' || player.meleeT <= 0) return false;
+  const el = MELEE_T - player.meleeT;
+  return el >= DEFLECT_A - DEFLECT_GRACE_EARLY && el <= DEFLECT_B + DEFLECT_GRACE_LATE && facing(player, from) > 0.3;
+}
+function localDeflect(id, from, at) {
+  deflectedIds.add(id);
+  net.send('hook_result', { id, to: from.id, r: 'deflect' });
+  net.send('fx', { k: 'deflect', p: at.toArray() });
+  sfx.deflect(at); puff(at.clone(), 0xffd070, 10, 0.45); puff(at.clone(), 0xffffff, 4, 0.3);
+  toast('Deflected!', 'k');
+}
+function checkIncomingDeflects() {
+  if (player.state !== 'alive' || player.meleeT <= 0) return;
+  const el = MELEE_T - player.meleeT; if (el < DEFLECT_A || el > DEFLECT_B) return;
+  const dc = center(player).addScaledVector(fwd(player), 1.1);
+  for (const ch of net.incoming()) {
+    if (ch.phase !== 'out' || deflectedIds.has(ch.id)) continue;
+    const from = net.proxies().find((r) => r.id === ch.from); if (!from) continue;
+    if (segSphere(ch.prev, ch.pos, dc, 1.35)) { ch.phase = 'back'; localDeflect(ch.id, from, ch.pos.clone()); }
+  }
+}
+net.on('hook_hit', (m, from) => {
+  if (!from) return;
+  if (deflectedIds.has(m.id)) return; // we already deflected this hook
+  const reply = (r) => net.send('hook_result', { id: m.id, to: from.id, r });
+  if (player.state !== 'alive' || player.protect > 0 || game.state !== 'playing') return reply('reject');
+  if (canDeflect(from)) return localDeflect(m.id, from, center(player).addScaledVector(fwd(player), 1.1));
+  if (player.hook) player.hook.phase = 'back';
+  const { end, dir, gap } = pullEnd(from, player);
+  player.state = 'hooked'; player.vel.set(0, 0, 0);
+  player.pull = { hooker: from, end, dir, gap, base: Math.atan2(dir.x, dir.z), t: 0, hookId: m.id };
+  player.lastHooker = from; player.lastHookT = game.T;
+  sfx.clank(player.pos); sfx.oink(player.pos, rnd(0.9, 1.2));
+  toast('Hooked by ' + from.name); hurtfx.style.opacity = 1; setTimeout(() => hurtfx.style.opacity = 0, 250);
+  reply('ok');
+});
+net.on('hook_result', (m, from) => {
+  const h = player.hook;
+  if (!h || h.id !== m.id) return;
+  if (m.r === 'ok') return;
+  h.phase = 'back'; if (h.target && h.target.isRemote) h.target.pullingMe = false;
+  if (m.r === 'deflect') {
+    player.stunT = Math.max(player.stunT, 0.5); player.hookCd += HOOK_CD;
+    toast('Hook deflected by ' + (from ? from.name : 'someone'));
+  }
+});
+net.on('pull_end', (m, from) => { if (from) from.pullingMe = false; });
+net.on('shove', (m, from) => {
+  if (!from || player.state !== 'alive' || player.protect > 0 || !Array.isArray(m.d)) return;
+  player.vel.set(m.d[0] * SHOVE_V, Math.max(player.vel.y, SHOVE_UP), m.d[1] * SHOVE_V);
+  player.onGround = false; player.knockT = 0.45;
+  player.lastHooker = from; player.lastHookT = game.T;
+  sfx.thud(player.pos); hurtfx.style.opacity = 1; setTimeout(() => hurtfx.style.opacity = 0, 200);
+});
+net.on('fx', (m) => {
+  const at = new V3(...m.p);
+  if (m.k === 'breath') { puff(at.clone().add(new V3(0, 0.4, 0)), 0x7dff4a, 10, 1.8); sfx.breath(at); }
+  else if (m.k === 'deflect') { sfx.deflect(at); puff(at.clone(), 0xffd070, 10, 0.45); }
+  else if (m.k === 'swipe') sfx.swipe(at);
+});
+net.on('kill', (m) => {
+  const me = net.myId;
+  const k = m.killer ? { name: net.nameOf(m.killer), isPlayer: m.killer === me } : null;
+  const v = { name: net.nameOf(m.victim), isPlayer: m.victim === me };
+  feed(k, v);
+  if (m.killer === me) { toast('Eliminated ' + v.name + '  +100', 'k'); sfx.kill(); }
+});
+net.on('win', (m) => { toast((m.who === net.myId ? 'You win' : m.name + ' wins') + ' the round!', 'k'); if (m.who === net.myId) sfx.kill(); });
+net.on('round', () => toast('New round! Scores reset'));
 
 // ---------- flow ----------
 function setPressed(groupId, v) { $(groupId).querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
@@ -801,6 +901,7 @@ async function startGame() {
     catch (e) { $('mnote').textContent = 'Could not reach the game server at ' + SERVER_URL + '. Start it with "npm run dev" and try again.'; return; }
     $('mnote').textContent = 'Click Play to lock the mouse. Press Esc to pause.';
   }
+  if (game.online) { game.target = 15; setPressed('tgt', '15'); }
   if (!game.online && net.room) net.leave();
   D = DIFF[game.diff];
   for (const p of pigs) { p.kills = 0; p.state = 'dead'; p.hook = null; p.pull = null; if (p.mesh) p.mesh.visible = false; }
@@ -861,6 +962,7 @@ function update(dt) {
     const h = p.hook;
     if (!h) continue;
     if (p.state === 'dead') { p.hook = null; continue; }
+    const ph0 = h.phase;
     if (h.phase === 'out') {
       const prev = h.pos.clone(), step = HOOK_SPEED * dt;
       h.pos.addScaledVector(h.dir, step); h.dist += step;
@@ -869,6 +971,10 @@ function update(dt) {
         const lo = tmp.set(q.pos.x, q.pos.y + 0.9, q.pos.z);
         if (segSphere(prev, h.pos, lo, 1.0) || segSphere(prev, h.pos, new V3(q.pos.x, q.pos.y + 2.1, q.pos.z), 0.95)) { hookHit(p, q); break; }
       }
+      if (h.phase === 'out' && p.isPlayer && net.room) for (const r of net.proxies()) {
+        if (r.state !== 'alive') continue;
+        if (segSphere(prev, h.pos, new V3(r.pos.x, r.pos.y + 0.9, r.pos.z), 1.0) || segSphere(prev, h.pos, new V3(r.pos.x, r.pos.y + 2.1, r.pos.z), 0.95)) { onlineHookHit(p, r); break; }
+      }
       if (h.phase === 'out') {
         const r = Math.hypot(h.pos.x, h.pos.z);
         if (h.dist > HOOK_RANGE || (h.pos.y < 0 && r >= INNER) || (h.pos.y < CURB_H && r >= PIT_R && r < INNER) || r > OUTER_R + 1) { h.phase = 'back'; if (h.dist <= HOOK_RANGE) sfx.clank(h.pos); }
@@ -876,6 +982,7 @@ function update(dt) {
     } else if (h.phase === 'pull') {
       if (!h.target || h.target.state !== 'hooked') h.phase = 'back'; else center(h.target, h.pos);
     }
+    if (ph0 !== 'back' && h.phase === 'back' && h.id && net.room) { net.send('hook_upd', { id: h.id, s: 'back' }); if (h.target && h.target.isRemote) h.target.pullingMe = false; }
     if (h.phase === 'back') {
       const hand = handPos(p), d = hand.sub(h.pos), L = d.length(), s = 75 * dt;
       if (L <= s) p.hook = null; else h.pos.addScaledVector(d.divideScalar(L), s);
@@ -973,6 +1080,7 @@ function frame(now) {
   const t = now / 1000;
   if (game.state !== 'paused') update(dt);
   net.update(dt);
+  if (net.room && game.state === 'playing') checkIncomingDeflects();
   updateCamera(dt, t);
   syncVisuals(dt, t);
   updateHUD(dt);
