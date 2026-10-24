@@ -297,6 +297,19 @@ const barrierMats = [];
   }
 }
 
+// Surfaces the grapple can stick to: everything built around the courtyard (buildings, towers, domes,
+// roofs, palms, the second row). The floor, curb and pit are round and handled separately.
+const grappleSurfaces = [];
+scene.updateMatrixWorld(true);
+scene.traverse((o) => {
+  if (!o.isMesh || !o.geometry) return;
+  if (o.material && (o.material.blending === THREE.AdditiveBlending)) return;
+  if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+  const c = o.geometry.boundingSphere.center.clone().applyMatrix4(o.matrixWorld);
+  if (Math.hypot(c.x, c.z) > 5 && Math.hypot(c.x, c.z) < 60) grappleSurfaces.push(o);
+});
+const grappleRay = new THREE.Raycaster();
+
 // ---------- pigs ----------
 function makePig(skin, pants) {
   const g = new THREE.Group();
@@ -1074,6 +1087,24 @@ function terrainHit(prev, pos) {
   }
   return null;
 }
+// Did the claw hit a building, tower, roof, palm...? Uses the real shapes, so tall walls and rooftops count.
+function buildingHit(prev, pos) {
+  const seg = pos.clone().sub(prev), len = seg.length(); if (len < 1e-4) return null;
+  grappleRay.set(prev, seg.divideScalar(len)); grappleRay.far = len;
+  const hit = grappleRay.intersectObjects(grappleSurfaces, false)[0];
+  if (!hit) return null;
+  const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new V3(0, 1, 0);
+  if (n.dot(seg) > 0) n.negate(); // always face back toward the thrower
+  const at = hit.point.clone();
+  let goal;
+  if (n.y > 0.6) goal = at.clone().add(new V3(0, 0.7, 0));                         // rooftop or top edge
+  else goal = at.clone().addScaledVector(new V3(n.x, 0, n.z).normalize(), 0.9).add(new V3(0, -1.3, 0)); // wall face
+  // you can't leave the courtyard yet, so far-away surfaces pull you up to that height at the courtyard edge
+  const gr = Math.hypot(goal.x, goal.z), maxR = OUTER_R - 0.9;
+  if (gr > maxR) { goal.x *= maxR / gr; goal.z *= maxR / gr; }
+  goal.y = Math.max(goal.y, 0.75);
+  return { at, goal };
+}
 function endZip(p) {
   const g = p.grapple; if (!g) return;
   p.vel.multiplyScalar(g.target ? 0.06 : 0.4); p.vel.y = Math.max(p.vel.y, 2.5);
@@ -1115,7 +1146,7 @@ function updateGrapples(dt) {
         if (p.isPlayer) toast('Zipping to ' + hit.name);
         if (g.id && net.room) net.send('grap_upd', { id: g.id, s: 'attach', tgt: hit.isRemote ? hit.id : undefined });
       } else {
-        const th = terrainHit(g.prev, g.pos);
+        const th = buildingHit(g.prev, g.pos) || terrainHit(g.prev, g.pos);
         if (th) {
           g.phase = 'pull'; g.pos.copy(th.at); g.goal = th.goal; sfx.grapHit(th.at);
           puff(th.at.clone(), 0xd8c4a0, 4, 0.6);
