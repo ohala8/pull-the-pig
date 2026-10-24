@@ -998,24 +998,61 @@ function botThink(b, dt) {
 }
 
 // ---------- input ----------
-const keys = {};
-let locked = false, dragMode = false, dragging = false, breathAnim = 0, recoil = 0;
+// Every control is an action with two slots. Codes are keyboard codes ("KeyW") or mouse buttons ("Mouse0".."Mouse4").
+const keys = {};   // codes currently held down
+let locked = false, dragMode = false, dragging = false, breathAnim = 0, recoil = 0, capturing = null;
 const SENS = 0.0022; // base sensitivity, scaled by the Settings slider
-addEventListener('keydown', (e) => {
-  if (['Space', 'Tab', 'ShiftLeft', 'ShiftRight'].includes(e.code)) e.preventDefault();
-  if (keys[e.code]) return; keys[e.code] = true;
-  if (e.code === 'KeyB' && game.state === 'playing' && game.practice) setDummy(!game.dummy);
+const ACTIONS = [
+  ['forward', 'Move forward', ['KeyW', 'ArrowUp']],
+  ['back', 'Move back', ['KeyS', 'ArrowDown']],
+  ['left', 'Strafe left', ['KeyA', 'ArrowLeft']],
+  ['right', 'Strafe right', ['KeyD', 'ArrowRight']],
+  ['jump', 'Jump', ['Space', null]],
+  ['hook', 'Chain hook', ['ShiftLeft', 'ShiftRight']],
+  ['breath', 'Breathing mask', ['KeyE', null]],
+  ['shove', 'Shove / deflect', ['KeyV', 'Mouse3']],
+  ['grapple', 'Grapple hook', ['KeyR', null]],
+  ['scores', 'Scoreboard (hold)', ['Tab', null]],
+  ['dummy', 'Practice bot: dummy or combat', ['KeyB', null]]
+];
+const DEFAULT_KEYS = Object.fromEntries(ACTIONS.map(([id, , d]) => [id, d.slice()]));
+const binds = (() => {
+  const saved = settings.keys || {}, out = {};
+  for (const [id] of ACTIONS) out[id] = Array.isArray(saved[id]) && saved[id].length === 2 ? saved[id].slice() : DEFAULT_KEYS[id].slice();
+  return out;
+})();
+function held(a) { return binds[a].some((c) => c && keys[c]); }
+function actionsFor(code) { return ACTIONS.map(([id]) => id).filter((id) => binds[id].includes(code)); }
+function keyName(c) {
+  if (!c) return '—';
+  const M = { Mouse0: 'Mouse 1', Mouse1: 'Mouse 3', Mouse2: 'Mouse 2', Mouse3: 'Mouse 4', Mouse4: 'Mouse 5', ShiftLeft: 'Shift', ShiftRight: 'R-Shift',
+    ControlLeft: 'Ctrl', ControlRight: 'R-Ctrl', AltLeft: 'Alt', AltRight: 'R-Alt', CapsLock: 'Caps', Backquote: '`', Minus: '-', Equal: '=',
+    BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backslash: '\\',
+    ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
+  return M[c] || c.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, 'Num ');
+}
+function keyLabel(a) { return binds[a].filter(Boolean).map(keyName).join(' / ') || 'unbound'; }
+function keyShort(a) { const n = keyName(binds[a][0] || binds[a][1]); return n === 'Shift' ? '⇧' : n.length > 5 ? n.slice(0, 5) : n; }
+function pressAction(a) {
+  if (a === 'dummy') { if (game.state === 'playing' && game.practice) setDummy(!game.dummy); return; }
   if (game.state !== 'playing' || player.state !== 'alive') return;
-  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+  if (a === 'hook') {
     if (player.hookCd <= 0 && !player.hook && player.stunT <= 0) {
       const dir = new V3(); camera.getWorldDirection(dir);
       fireHook(player, camera.position.clone().addScaledVector(dir, 0.6), dir); recoil = 1;
     }
-  }
-  if (e.code === 'KeyV') melee(player);
-  if (e.code === 'KeyR' && player.hasGrapple) { const dir = new V3(); camera.getWorldDirection(dir); fireGrapple(player, camera.position.clone().addScaledVector(dir, 0.6), dir); }
-  if (e.code === 'KeyE') { const [wx, wz] = moveWish(); breathe(player, wx, wz); }
-});
+  } else if (a === 'shove') melee(player);
+  else if (a === 'grapple') { if (player.hasGrapple) { const dir = new V3(); camera.getWorldDirection(dir); fireGrapple(player, camera.position.clone().addScaledVector(dir, 0.6), dir); } }
+  else if (a === 'breath') { const [wx, wz] = moveWish(); breathe(player, wx, wz); }
+}
+function codeDown(code, e) {
+  if (capturing) return;
+  const acts = actionsFor(code);
+  if (acts.length && game.state === 'playing' && e) e.preventDefault();
+  if (keys[code]) return; keys[code] = true;
+  for (const a of acts) pressAction(a);
+}
+addEventListener('keydown', (e) => { if (e.code === 'Tab') e.preventDefault(); codeDown(e.code, e); });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 document.addEventListener('mousemove', (e) => {
@@ -1026,13 +1063,12 @@ document.addEventListener('mousemove', (e) => {
   player.pitch = Math.max(-1.45, Math.min(1.45, player.pitch - e.movementY * s));
 });
 canvas.addEventListener('mousedown', () => { dragging = true; if (game.state === 'playing' && !locked && !dragMode) lockPointer(); });
-addEventListener('mouseup', (e) => { dragging = false; if (e.button === 3 || e.button === 4) e.preventDefault(); });
+addEventListener('mouseup', (e) => { dragging = false; keys['Mouse' + e.button] = false; if (e.button === 3 || e.button === 4) e.preventDefault(); });
 document.addEventListener('mousedown', (e) => {
-  if (e.button !== 3) return;
-  e.preventDefault();
-  if (game.state === 'playing' && player.state === 'alive') melee(player);
+  if (e.button === 3 || e.button === 4) e.preventDefault(); // keep the browser's back/forward buttons from leaving the game
+  if (game.state === 'playing' && (locked || dragMode)) codeDown('Mouse' + e.button, e);
 });
-addEventListener('auxclick', (e) => { if (e.button === 3 || e.button === 4) e.preventDefault(); });
+addEventListener('contextmenu', (e) => { if (game.state === 'playing') e.preventDefault(); });
 function lockPointer() {
   try { const r = canvas.requestPointerLock && canvas.requestPointerLock(); if (r && r.catch) r.catch(() => { dragMode = true; }); }
   catch (e) { dragMode = true; }
@@ -1045,7 +1081,7 @@ document.addEventListener('pointerlockerror', () => { dragMode = true; });
 function moveWish() {
   const f = fwd(player), r = new V3(-f.z, 0, f.x);
   let x = 0, z = 0;
-  const fw = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), st = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+  const fw = (held('forward') ? 1 : 0) - (held('back') ? 1 : 0), st = (held('right') ? 1 : 0) - (held('left') ? 1 : 0);
   x = f.x * fw + r.x * st; z = f.z * fw + r.z * st;
   const l = Math.hypot(x, z); return l ? [x / l, z / l] : [0, 0];
 }
@@ -1087,9 +1123,9 @@ function updateHUD(dt) {
   const H = $('hookcd'), B = $('breathcd');
   H.style.setProperty('--p', hc.toFixed(3)); B.style.setProperty('--p', bc.toFixed(3));
   H.classList.toggle('ready', hc >= 1); B.classList.toggle('ready', bc >= 1);
-  H.querySelector('.in').textContent = player.hookCd > 0 ? Math.ceil(player.hookCd) : '⇧';
-  B.querySelector('.in').textContent = player.breathCd > 0 ? Math.ceil(player.breathCd) : 'E';
-  const GR = $('grapcd'); GR.hidden = !player.hasGrapple; GR.style.setProperty('--p', '1');
+  H.querySelector('.in').textContent = player.hookCd > 0 ? Math.ceil(player.hookCd) : keyShort('hook');
+  B.querySelector('.in').textContent = player.breathCd > 0 ? Math.ceil(player.breathCd) : keyShort('breath');
+  const GR = $('grapcd'); GR.hidden = !player.hasGrapple; GR.querySelector('.in').textContent = keyShort('grapple'); GR.style.setProperty('--p', '1');
   if (player.state === 'dead') $('dead').querySelector('.sm').textContent = 'Respawning in ' + Math.max(0, player.respawnT).toFixed(1) + 's';
   else $('dead').hidden = true;
   hudT -= dt; if (hudT > 0) return; hudT = 0.2;
@@ -1099,8 +1135,8 @@ function updateHUD(dt) {
   const row = (p, rk, cls) => `<div class="row ${cls}"><span class="rk">${rk}</span><span>${esc(p.name)}</span><span class="n">${p.kills}</span></div>`;
   $('score').innerHTML = `<div class="cap">${game.online ? 'Online · ' + net.count() + (net.count() === 1 ? ' pig' : ' pigs') + ' in room' : practiceOn() ? 'Practice · ' + (game.dummy ? 'Dummy' : 'Combat') + ' bot · B to switch' : 'First to ' + game.target}</div>` + (lead === player ? row(player, 1, 'lead') + (list[1] ? row(list[1], 2, '') : '') : row(lead, 1, 'lead') + row(player, myRank, 'me'));
   $('you').innerHTML = `<small>Eliminations</small>${player.kills} / ${game.target}`;
-  const tab = $('tabsb'); tab.hidden = !keys.Tab;
-  if (keys.Tab) tab.innerHTML = `<table class="sb">${sbRows(list)}</table>`;
+  const tab = $('tabsb'), showTab = held('scores'); tab.hidden = !showTab;
+  if (showTab) tab.innerHTML = `<table class="sb">${sbRows(list)}</table>`;
 }
 
 // ---------- online combat ----------
@@ -1282,6 +1318,55 @@ $('sreset').addEventListener('click', () => { Object.assign(settings, DEFAULT_SE
 function openHowto() { $('howto').hidden = false; $('hdone').focus(); }
 $('mhowto').addEventListener('click', openHowto);
 $('hdone').addEventListener('click', () => { $('howto').hidden = true; try { localStorage.setItem('ptp-seen-howto', '1'); } catch (e) { /* storage unavailable */ } });
+
+// controls list in Settings
+function renderKeys() {
+  const list = $('keylist'); list.innerHTML = '';
+  for (const [id, label] of ACTIONS) {
+    const row = document.createElement('div'); row.className = 'krow';
+    const name = document.createElement('span'); name.textContent = label; row.appendChild(name);
+    for (let i = 0; i < 2; i++) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'kslot'; b.id = `k-${id}-${i}`;
+      const waiting = capturing && capturing.a === id && capturing.i === i;
+      b.textContent = waiting ? 'Press a key…' : keyName(binds[id][i]);
+      if (waiting) b.classList.add('cap'); if (!binds[id][i]) b.classList.add('empty');
+      b.addEventListener('click', () => { capturing = { a: id, i, t: performance.now() }; renderKeys(); });
+      row.appendChild(b);
+    }
+    list.appendChild(row);
+  }
+}
+function refreshKeyLabels() {
+  document.querySelectorAll('[data-act]').forEach((el) => {
+    const a = el.dataset.act, f = el.dataset.fmt;
+    if (a === 'move') { const n = ['forward', 'left', 'back', 'right'].map((x) => keyName(binds[x][0] || binds[x][1])); el.textContent = n.join('') === 'WASD' ? 'WASD' : n.join(' '); }
+    else el.textContent = f === 'short' ? keyShort(a) : keyLabel(a);
+  });
+}
+function assignKey(code) {
+  const { a, i } = capturing;
+  let moved = null;
+  if (code) for (const [id] of ACTIONS) for (let j = 0; j < 2; j++) if (binds[id][j] === code && !(id === a && j === i)) { binds[id][j] = null; moved = id; }
+  binds[a][i] = code;
+  settings.keys = binds; saveSettings();
+  capturing = null; renderKeys(); refreshKeyLabels();
+  if (moved) { const lbl = ACTIONS.find((x) => x[0] === moved)[1]; $('knote').textContent = `${keyName(code)} was moved from ${lbl}.`; }
+  else $('knote').textContent = 'Click a slot, then press a key or mouse button. Backspace clears it, Esc cancels.';
+}
+addEventListener('keydown', (e) => {
+  if (!capturing) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  if (e.code === 'Escape') { capturing = null; renderKeys(); return; }
+  assignKey(e.code === 'Backspace' || e.code === 'Delete' ? null : e.code);
+}, true);
+addEventListener('mousedown', (e) => {
+  if (!capturing || performance.now() - capturing.t < 150) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  assignKey('Mouse' + e.button);
+}, true);
+addEventListener('contextmenu', (e) => { if (capturing) e.preventDefault(); }, true);
+$('kreset').addEventListener('click', () => { for (const [id] of ACTIONS) binds[id] = DEFAULT_KEYS[id].slice(); settings.keys = binds; saveSettings(); capturing = null; renderKeys(); refreshKeyLabels(); });
+renderKeys(); refreshKeyLabels();
 applySettings();
 try { if (!localStorage.getItem('ptp-seen-howto')) openHowto(); } catch (e) { openHowto(); }
 
@@ -1333,7 +1418,7 @@ function resetPickup() { hidePickup(); pickup.timer = 3; for (const p of pigs) {
 function grantGrapple(p) {
   p.hasGrapple = true; sfx.pickup(p.pos);
   puff(p.pos.clone().add(new V3(0, 1.2, 0)), GRAP_COLOR, 8, 1.2);
-  if (p.isPlayer) toast('Grapple hook! Press R', 'k');
+  if (p.isPlayer) toast('Grapple hook! Press ' + keyLabel('grapple'), 'k');
 }
 let grabAskT = 0;
 function updatePickup(dt) {
@@ -1479,7 +1564,7 @@ function update(dt) {
     else if (p.grapple && p.grapple.phase === 'pull') stepGrapple(p, dt);
     else {
       let w;
-      if (p.isPlayer) { const [x, z] = moveWish(); w = [x, z, !!keys.Space]; }
+      if (p.isPlayer) { const [x, z] = moveWish(); w = [x, z, held('jump')]; }
       else w = botThink(p, dt);
       if (p.hook && p.hook.phase === 'pull') w = [0, 0, false];
       stepBody(p, dt, w[0], w[1], w[2]);

@@ -16,6 +16,8 @@ Twelve hogs, one hole. A first-person brawler for the browser, based on the Over
 | Tab | Scoreboard |
 | Esc | Pause |
 
+Every control except Esc can be changed in **Settings → Controls** (two slots per action; keyboard keys or mouse buttons).
+
 ## Maps
 
 - **Ilios Well:** a courtyard around one deep pit. Hook pigs across the hole.

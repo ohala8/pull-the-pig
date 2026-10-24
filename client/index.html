@@ -78,6 +78,15 @@ html,body{height:100%;margin:0;overflow:hidden;background:#2a1d17;color:var(--in
 .txt{font:700 16px var(--body);color:var(--ink);background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.25);padding:6px 10px;width:12em;transform:skewX(-10deg)}
 .txt:focus-visible{outline:3px solid #fff;outline-offset:2px}
 #howto,#settings{background:rgba(22,12,8,.94)}
+.subh{margin:4px 0 0;font:800 22px var(--display);text-transform:uppercase;letter-spacing:.06em;transform:skewX(-10deg);color:var(--ink)}
+.keylist{display:grid;gap:6px;background:var(--shade);padding:12px 16px;border-left:4px solid var(--hog)}
+.krow{display:grid;grid-template-columns:minmax(0,1fr) 7.5em 7.5em;gap:8px;align-items:center;font-size:15px}
+.kslot{font:800 15px var(--display);letter-spacing:.04em;color:var(--ink);background:#3d2a20;border:1px solid rgba(255,255,255,.25);border-bottom-width:3px;border-radius:4px;padding:4px 6px;cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kslot:hover{border-color:var(--hog)}
+.kslot.empty{color:#a8927e}
+.kslot.cap{background:var(--hog);color:#2a1206;border-color:var(--hog)}
+.kslot:focus-visible{outline:3px solid #fff;outline-offset:2px}
+@media (max-width:520px){.krow{grid-template-columns:1fr 1fr}.krow span{grid-column:1/-1}}
 .row2{display:flex;flex-wrap:wrap;gap:14px 18px;align-items:center}
 .ghost{font:800 18px var(--display);text-transform:uppercase;letter-spacing:.06em;color:var(--ink);background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.3);padding:8px 18px;transform:skewX(-10deg);cursor:pointer}
 .ghost:hover{background:rgba(0,0,0,.6);border-color:var(--hog)}
@@ -114,9 +123,9 @@ table.sb td.n{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="hudwrap" hidden>
   <div class="hud" id="abil">
-    <div><kbd>E</kbd><span class="g slant">Gas power!</span><span>Air jump up</span></div>
-    <div><kbd>⇧</kbd><span class="o slant">Chain hook</span><span>Pull them in</span></div>
-    <div><kbd>V</kbd><span class="slant" style="color:#ffd36a">Shove</span><span>Knockback target</span></div>
+    <div><kbd data-act="breath" data-fmt="short">E</kbd><span class="g slant">Gas power!</span><span>Air jump up</span></div>
+    <div><kbd data-act="hook" data-fmt="short">⇧</kbd><span class="o slant">Chain hook</span><span>Pull them in</span></div>
+    <div><kbd data-act="shove" data-fmt="short">V</kbd><span class="slant" style="color:#ffd36a">Shove</span><span>Knockback target</span></div>
   </div>
   <div class="hud" id="score"></div>
   <div class="hud" id="feed"></div>
@@ -138,13 +147,13 @@ table.sb td.n{text-align:right;font-variant-numeric:tabular-nums}
     <h1 class="title">Pull<br>the <em>Pig</em></h1>
     <p class="sub">Twelve hogs, one hole. Stand at the rim, hook a pig from across the pit and drag it in. First pig to the target eliminations wins.</p>
     <div class="keys">
-      <kbd>WASD</kbd><span>Move</span>
-      <kbd>Space</kbd><span>Jump</span>
-      <kbd>Shift</kbd><span>Chain hook: throw it at the crosshair and pull whoever it hits. Turn quickly right after it lands to drag them sideways, like into the pit.</span>
-      <kbd>E</kbd><span>Breathing mask: one deep breath launches you upward. Use it to climb out of the pit.</span>
-      <kbd>V / Mouse 4</kbd><span>Shove: swipe your hook to knock a pig backward. Push one off the rim and into the pit. Time the swipe into an incoming hook to deflect it and stun the thrower. Miss, and you're stuck mid-swing.</span>
-      <kbd>R</kbd><span>Grapple hook power-up: grab the glowing cyan claw on the plaza, then throw it once. It zips you to whatever it hits, wall, floor, rim or pig.</span>
-      <kbd>Mouse</kbd><span>Look around. Hold Tab for the scoreboard.</span>
+      <kbd data-act="move">WASD</kbd><span>Move</span>
+      <kbd data-act="jump">Space</kbd><span>Jump</span>
+      <kbd data-act="hook">Shift</kbd><span>Chain hook: throw it at the crosshair and pull whoever it hits. Turn quickly right after it lands to drag them sideways, like into the pit.</span>
+      <kbd data-act="breath">E</kbd><span>Breathing mask: one deep breath launches you upward. Use it to climb out of the pit.</span>
+      <kbd data-act="shove">V / Mouse 4</kbd><span>Shove: swipe your hook to knock a pig backward. Push one off the rim and into the pit. Time the swipe into an incoming hook to deflect it and stun the thrower. Miss, and you're stuck mid-swing.</span>
+      <kbd data-act="grapple">R</kbd><span>Grapple hook power-up: grab the glowing cyan claw on the plaza, then throw it once. It zips you to whatever it hits, wall, floor, rim or pig.</span>
+      <kbd>Mouse</kbd><span>Look around. Hold <span data-act="scores">Tab</span> for the scoreboard. Change any key in Settings.</span>
     </div>
     <div class="opts">
       <div class="opt"><label id="mapl">Map</label><div class="seg" role="group" aria-labelledby="mapl" id="mapsel">
@@ -188,8 +197,11 @@ table.sb td.n{text-align:right;font-variant-numeric:tabular-nums}
       <div class="set"><label for="s-vol">Volume</label><input type="range" id="s-vol" min="0" max="1" step="0.05"><output id="o-vol" for="s-vol"></output></div>
       <div class="set"><label for="s-fov">Field of view</label><input type="range" id="s-fov" min="60" max="110" step="1"><output id="o-fov" for="s-fov"></output></div>
     </div>
-    <p class="note">Saved in this browser. Higher field of view shows more of the courtyard; lower makes pigs look bigger.</p>
-    <div class="row2"><button class="go" id="sdone" type="button">Done</button><button class="ghost" id="sreset" type="button">Reset to defaults</button></div>
+    <p class="note">Higher field of view shows more of the map; lower makes pigs look bigger.</p>
+    <h3 class="subh">Controls</h3>
+    <div class="keylist" id="keylist"></div>
+    <p class="note" id="knote">Click a slot, then press a key or mouse button. Backspace clears it, Esc cancels.</p>
+    <div class="row2"><button class="go" id="sdone" type="button">Done</button><button class="ghost" id="sreset" type="button">Reset sliders</button><button class="ghost" id="kreset" type="button">Reset controls</button></div>
   </div>
 </div>
 
@@ -198,15 +210,15 @@ table.sb td.n{text-align:right;font-variant-numeric:tabular-nums}
     <h2 class="title" style="font-size:clamp(44px,10vw,80px)">How to <em>play</em></h2>
     <p class="sub">Push other pigs into the pit in the middle. Every pig you hook or shove in counts as your elimination. The first to the target wins.</p>
     <ol class="tips">
-      <li><b>Hook from the rim.</b> Stand at the edge, aim across the pit and press <kbd>Shift</kbd>. Your hook pulls the pig to just in front of you, so if you're at the rim, it drops right into the hole.</li>
+      <li><b>Hook from the rim.</b> Stand at the edge, aim across the pit and press <kbd data-act="hook">Shift</kbd>. Your hook pulls the pig to just in front of you, so if you're at the rim, it drops right into the hole.</li>
       <li><b>Flick it in.</b> Right after your hook lands, turn quickly. The pig gets dragged toward where you're facing, which helps when it's beside you instead of across the pit.</li>
-      <li><b>Shove up close.</b> <kbd>V</kbd> or mouse button 4 swipes your hook and knocks a nearby pig back. Push pigs standing at the rim over the edge.</li>
+      <li><b>Shove up close.</b> <kbd data-act="shove">V / Mouse 4</kbd> swipes your hook and knocks a nearby pig back. Push pigs standing at the rim over the edge.</li>
       <li><b>Deflect hooks.</b> Swing your shove into an incoming hook just before it reaches you. It bounces back and the thrower is stunned. Miss, and you're stuck mid-swing.</li>
-      <li><b>Breathe out of the pit.</b> Got pulled in? Press <kbd>E</kbd> fast. Your breathing mask launches you upward, and you can steer back over the rim. It has a 7-second cooldown.</li>
-      <li><b>Grab the grapple.</b> A glowing cyan claw appears somewhere on the plaza. Walk into it, then press <kbd>R</kbd> to throw it once. It zips you to whatever it hits: a wall, the floor, the rim (even from inside the pit), or another pig.</li>
+      <li><b>Breathe out of the pit.</b> Got pulled in? Press <kbd data-act="breath">E</kbd> fast. Your breathing mask launches you upward, and you can steer back over the rim. It has a 7-second cooldown.</li>
+      <li><b>Grab the grapple.</b> A glowing cyan claw appears somewhere on the plaza. Walk into it, then press <kbd data-act="grapple">R</kbd> to throw it once. It zips you to whatever it hits: a wall, the floor, the rim (even from inside the pit), or another pig.</li>
       <li><b>Rooftops map.</b> There's no pit here: every alley between roofs is one, and any edge with a green line is a drop. Jump the gaps, breathe up onto the tall center roof, or grapple a roof's wall to climb onto it.</li>
     </ol>
-    <p class="note">Move with <kbd>WASD</kbd>, jump with <kbd>Space</kbd>, hold <kbd>Tab</kbd> for scores, <kbd>Esc</kbd> to pause.</p>
+    <p class="note">Move with <kbd data-act="move">WASD</kbd>, jump with <kbd data-act="jump">Space</kbd>, hold <kbd data-act="scores">Tab</kbd> for scores, <kbd>Esc</kbd> to pause.</p>
     <div class="row2"><button class="go" id="hdone" type="button">Got it</button></div>
   </div>
 </div>
