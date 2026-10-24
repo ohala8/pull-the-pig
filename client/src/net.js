@@ -97,9 +97,9 @@ export function createNet(ctx) {
       });
       return out.sort((a, b) => b.kills - a.kills || (a === me ? -1 : 1));
     },
-    async connect(name) {
+    async connect(name, map) {
       const client = new Client(SERVER_URL);
-      room = await client.joinOrCreate('pig', { name });
+      room = await client.joinOrCreate('pig', { name, map: map === 'roofs' ? 'roofs' : 'well' });
       room.state.players.onAdd((s, id) => {
         if (id === room.sessionId) return;
         addRemote(id, s);

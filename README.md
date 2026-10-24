@@ -16,6 +16,13 @@ Twelve hogs, one hole. A first-person brawler for the browser, based on the Over
 | Tab | Scoreboard |
 | Esc | Pause |
 
+## Maps
+
+- **Ilios Well:** a courtyard around one deep pit. Hook pigs across the hole.
+- **Ilios Rooftops:** eight flat roofs around a tall center roof, split by 3 m alleys. Every edge is a drop, marked with a green line. Jump the gaps, cross two plank bridges, breathe up to the center roof, or grapple a roof's wall to climb onto it. Chimneys are the only cover. The layout lives in `shared/maps.json`, which both the game and the server read.
+
+Pick the map on the menu. Online, each map has its own rooms.
+
 ## Modes
 
 - **Match:** you against 11 bots, first to 10, 15 or 25 eliminations.

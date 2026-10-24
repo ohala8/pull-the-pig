@@ -32,10 +32,11 @@ class Pickup extends Schema {
     super();
     this.active = false;
     this.x = 0;
+    this.y = 0;
     this.z = 0;
   }
 }
-defineTypes(Pickup, { active: 'boolean', x: 'float32', z: 'float32' });
+defineTypes(Pickup, { active: 'boolean', x: 'float32', y: 'float32', z: 'float32' });
 
 class PigState extends Schema {
   constructor() {

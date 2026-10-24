@@ -37,7 +37,7 @@ function serveStatic(req, res) {
 const httpServer = http.createServer(serveStatic);
 
 const gameServer = new Server({ transport: new WebSocketTransport({ server: httpServer, pingInterval: 5000 }) });
-gameServer.define('pig', PigRoom);
+gameServer.define('pig', PigRoom).filterBy(['map']); // one set of rooms per map
 
 gameServer.listen(port).then(() => {
   console.log(`Pull The Pig server listening on ws://localhost:${port}`);

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createNet, SERVER_URL } from './net.js';
+import MAPS_DATA from '../../shared/maps.json';
 
 const V3 = THREE.Vector3;
 // ---------- tuning ----------
@@ -123,19 +124,20 @@ const puffTex = canvasTex(64, 64, (x) => {
 });
 
 // ---------- arena: Ilios-style well courtyard ----------
+const wellG = new THREE.Group(); scene.add(wellG);
 const floor = mesh(new THREE.RingGeometry(INNER, 44, 128, 4), lam(0xffffff, { map: floorTex }), 0, 0, 0);
-floor.rotation.x = -Math.PI / 2; floor.castShadow = false; scene.add(floor);
+floor.rotation.x = -Math.PI / 2; floor.castShadow = false; wellG.add(floor);
 const band = mesh(new THREE.RingGeometry(INNER, INNER + 1.3, 128, 1), lam(0xd8b98f, { map: cloneTex(blockTex, 5, 5) }), 0, 0.012, 0);
-band.rotation.x = -Math.PI / 2; band.castShadow = false; scene.add(band);
+band.rotation.x = -Math.PI / 2; band.castShadow = false; wellG.add(band);
 // chunky segmented curb
 {
   const V2 = THREE.Vector2, b = 0.09, NSEG = 20, gap = 0.004;
   const prof = [new V2(PIT_R, -0.8), new V2(PIT_R, CURB_H - b), new V2(PIT_R + b, CURB_H), new V2(INNER - b, CURB_H), new V2(INNER, CURB_H - b), new V2(INNER, 0)];
   const fill = [new V2(PIT_R + 0.04, -0.8), new V2(PIT_R + 0.04, CURB_H - 0.05), new V2(INNER - 0.04, CURB_H - 0.05), new V2(INNER - 0.04, 0)];
-  scene.add(mesh(new THREE.LatheGeometry(fill, 96), lam(0x9a7a58, { side: THREE.DoubleSide })));
+  wellG.add(mesh(new THREE.LatheGeometry(fill, 96), lam(0x9a7a58, { side: THREE.DoubleSide })));
   for (let i = 0; i < NSEG; i++) {
     const tone = rnd(0.86, 1.0);
-    scene.add(mesh(new THREE.LatheGeometry(prof, 5, (i / NSEG) * Math.PI * 2 + gap, (Math.PI * 2) / NSEG - gap * 2), lam(new THREE.Color(0xe9d1aa).multiplyScalar(tone), { map: plasterTex, side: THREE.DoubleSide })));
+    wellG.add(mesh(new THREE.LatheGeometry(prof, 5, (i / NSEG) * Math.PI * 2 + gap, (Math.PI * 2) / NSEG - gap * 2), lam(new THREE.Color(0xe9d1aa).multiplyScalar(tone), { map: plasterTex, side: THREE.DoubleSide })));
   }
 }
 // pit walls: stone blocks fading to black
@@ -145,16 +147,16 @@ band.rotation.x = -Math.PI / 2; band.castShadow = false; scene.add(band);
   for (let i = 0; i < pos.count; i++) { const t = Math.pow((pos.getY(i) + 12) / 24, 2.6); cols.push(0.5 * t, 0.38 * t, 0.29 * t); }
   geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
   const wall = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, map: cloneTex(blockTex, 12, 7), side: THREE.BackSide, fog: false }));
-  wall.position.y = -12.8; scene.add(wall);
+  wall.position.y = -12.8; wellG.add(wall);
   const bottom = new THREE.Mesh(new THREE.CircleGeometry(PIT_R, 48), new THREE.MeshBasicMaterial({ color: 0x000000, fog: false }));
-  bottom.rotation.x = -Math.PI / 2; bottom.position.y = -24.5; scene.add(bottom);
+  bottom.rotation.x = -Math.PI / 2; bottom.position.y = -24.5; wellG.add(bottom);
 }
 // glowing rim
 const glowMat = new THREE.MeshBasicMaterial({ color: 0x7dff4a });
 const rim = new THREE.Mesh(new THREE.TorusGeometry(PIT_R + 0.03, 0.06, 6, 128), glowMat);
-rim.rotation.x = Math.PI / 2; rim.position.y = CURB_H + 0.01; scene.add(rim);
+rim.rotation.x = Math.PI / 2; rim.position.y = CURB_H + 0.01; wellG.add(rim);
 const halo = new THREE.Mesh(new THREE.RingGeometry(PIT_R, PIT_R + 0.16, 128, 1), new THREE.MeshBasicMaterial({ color: 0x7dff4a, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }));
-halo.rotation.x = -Math.PI / 2; halo.position.y = CURB_H + 0.012; scene.add(halo);
+halo.rotation.x = -Math.PI / 2; halo.position.y = CURB_H + 0.012; wellG.add(halo);
 
 // courtyard facades
 const safeSpots = [];
@@ -198,7 +200,7 @@ const barrierMats = [];
   for (let i = 0; i < NB; i++) {
     const type = TYPES[i], a = (i / NB) * Math.PI * 2;
     const g = new THREE.Group(); g.position.set(Math.cos(a) * R_F, 0, Math.sin(a) * R_F);
-    g.rotation.y = Math.atan2(-Math.cos(a), -Math.sin(a)); scene.add(g);
+    g.rotation.y = Math.atan2(-Math.cos(a), -Math.sin(a)); wellG.add(g);
     const H = type === 'tower' ? rnd(12.5, 14) : rnd(8.5, 10.5);
     const tint = new THREE.Color().setHSL(rnd(0.085, 0.1), rnd(0.4, 0.6), rnd(0.8, 0.87));
     let door = null, roomD = 0.3;
@@ -263,14 +265,14 @@ const barrierMats = [];
     const pot = new THREE.Group(); pot.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
     pot.add(mesh(new THREE.CylinderGeometry(0.45, 0.32, 0.75, 12), potM, 0, 0.37, 0));
     for (let k = 0; k < 10; k++) { const l = mesh(new THREE.ConeGeometry(0.07, rnd(0.8, 1.3), 4), agaveM, 0, 0.9, 0); l.rotation.set(rnd(0.3, 0.9), (k / 10) * Math.PI * 2, 0, 'YXZ'); pot.add(l); }
-    scene.add(pot);
+    wellG.add(pot);
   }
   // second row skyline
   const roofM = lam(0x3d6fb0), whiteM = lam(0xf2ead9);
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * Math.PI * 2 + rnd(-0.08, 0.08), r = rnd(27, 34), h = rnd(13, 21), w = rnd(6, 10), d = rnd(6, 10);
     const b = mesh(new THREE.BoxGeometry(w, h, d), lam(new THREE.Color().setHSL(rnd(0.07, 0.1), rnd(0.3, 0.5), rnd(0.74, 0.88))), Math.cos(a) * r, h / 2, Math.sin(a) * r);
-    b.lookAt(0, h / 2, 0); scene.add(b);
+    b.lookAt(0, h / 2, 0); wellG.add(b);
     b.add(mesh(new THREE.BoxGeometry(w + 0.3, 0.4, d + 0.3), whiteM, 0, h / 2 + 0.2, 0));
     if (i % 3 === 0) b.add(mesh(new THREE.SphereGeometry(Math.min(w, d) * 0.35, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), roofM, 0, h / 2 + 0.4, 0));
     else if (i % 3 === 1) { const c = mesh(new THREE.ConeGeometry(Math.min(w, d) * 0.5, 2.6, 4), roofM, 0, h / 2 + 1.7, 0); c.rotation.y = Math.PI / 4; b.add(c); }
@@ -285,7 +287,7 @@ const barrierMats = [];
       const leaf = mesh(new THREE.ConeGeometry(0.6, 4.8, 4), leafM, 0, th, 0);
       leaf.scale.z = 0.15; leaf.rotation.set(0, (k / 8) * Math.PI * 2, 1.85); leaf.translateY(2.3); palm.add(leaf);
     }
-    scene.add(palm);
+    wellG.add(palm);
   }
   // orange cliffs on the horizon
   const rockM = new THREE.MeshLambertMaterial({ color: 0xc98552, flatShading: true });
@@ -293,22 +295,307 @@ const barrierMats = [];
     const a = rnd(0, Math.PI * 2), r = rnd(95, 150), s = rnd(22, 42);
     const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 1), rockM);
     rock.position.set(Math.cos(a) * r, rnd(-4, 6), Math.sin(a) * r); rock.scale.set(rnd(0.9, 1.4), rnd(1.1, 1.9), rnd(0.9, 1.4)); rock.rotation.y = rnd(0, 6);
-    scene.add(rock);
+    wellG.add(rock);
   }
 }
 
 // Surfaces the grapple can stick to: everything built around the courtyard (buildings, towers, domes,
 // roofs, palms, the second row). The floor, curb and pit are round and handled separately.
-const grappleSurfaces = [];
+const wellSurfaces = [];
 scene.updateMatrixWorld(true);
-scene.traverse((o) => {
+wellG.traverse((o) => {
   if (!o.isMesh || !o.geometry) return;
   if (o.material && (o.material.blending === THREE.AdditiveBlending)) return;
   if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
   const c = o.geometry.boundingSphere.center.clone().applyMatrix4(o.matrixWorld);
-  if (Math.hypot(c.x, c.z) > 5 && Math.hypot(c.x, c.z) < 60) grappleSurfaces.push(o);
+  if (Math.hypot(c.x, c.z) > 5 && Math.hypot(c.x, c.z) < 60) wellSurfaces.push(o);
 });
+let grappleSurfaces = wellSurfaces;
 const grappleRay = new THREE.Raycaster();
+
+// ---------- map 2: Ilios Rooftops ----------
+// Flat roofs at different heights above the town, split by alleys. Fall into an alley and you're out.
+// No railings anywhere; a green line marks every deadly edge, like the well's rim.
+const ROOFS = MAPS_DATA.roofs;
+const ROOF_STEP = 0.35; // you can walk up a ledge this high without jumping
+const ROOF_BOXES = ROOFS.boxes.map((b) => Object.assign({}, b, { bottom: b.kind === 'chimney' ? b.base : ROOFS.ground, links: [], breathLinks: [] }));
+const WALKABLE = ROOF_BOXES.filter((b) => b.kind !== 'chimney');
+const RING = WALKABLE.filter((b) => b.kind === 'roof' && b.id !== 'C');
+const rectGap = (a, b) => Math.hypot(Math.max(0, a.x0 - b.x1, b.x0 - a.x1), Math.max(0, a.z0 - b.z1, b.z0 - a.z1));
+for (const a of WALKABLE) for (const b of WALKABLE) {
+  if (a === b) continue;
+  const gap = rectGap(a, b), up = b.top - a.top;
+  if (gap <= 3.4 && up <= 0.8) a.links.push(b);        // jump or walk across
+  else if (gap <= 3.4 && up <= 4) a.breathLinks.push(b); // needs the breathing mask to get up there
+}
+const inRect = (b, x, z, m = 0) => x >= b.x0 + m && x <= b.x1 - m && z >= b.z0 + m && z <= b.z1 - m;
+function roofTopUnder(x, z, maxY, list = ROOF_BOXES) {
+  let g = null;
+  for (const b of list) if (inRect(b, x, z) && b.top <= maxY && (!g || b.top > g.top)) g = b;
+  return g;
+}
+const roofAt = (pos) => roofTopUnder(pos.x, pos.z, pos.y + 0.15, WALKABLE);
+function randInRoof(b, m) { return new V3(rnd(b.x0 + m, b.x1 - m), b.top, rnd(b.z0 + m, b.z1 - m)); }
+function closestOnRect(b, x, z) { return [Math.max(b.x0, Math.min(x, b.x1)), Math.max(b.z0, Math.min(z, b.z1))]; }
+function pointToward(b, x, z, inward, spread) {
+  // a point on roof b near the edge closest to (x, z), pulled inward
+  let [cx, cz] = closestOnRect(b, x, z);
+  const mx = (b.x0 + b.x1) / 2, mz = (b.z0 + b.z1) / 2;
+  const dx = mx - cx, dz = mz - cz, L = Math.hypot(dx, dz) || 1;
+  cx += dx / L * inward + (-dz / L) * spread; cz += dz / L * inward + (dx / L) * spread;
+  const m = Math.min(0.7, (b.x1 - b.x0) / 2 - 0.05, (b.z1 - b.z0) / 2 - 0.05);
+  return new V3(Math.max(b.x0 + m, Math.min(cx, b.x1 - m)), b.top, Math.max(b.z0 + m, Math.min(cz, b.z1 - m)));
+}
+function edgeDist(b, x, z) { return Math.min(x - b.x0, b.x1 - x, z - b.z0, b.z1 - z); }
+
+function collideRoofs(p, ox, oy, oz, wasGround) {
+  const stepY = wasGround ? ROOF_STEP : 0.05;
+  for (const b of ROOF_BOXES) {
+    if (p.pos.y >= b.top - 0.02 || oy >= b.top - 0.05) continue;   // above it, or landing on it
+    if (wasGround && b.top - p.pos.y <= stepY) continue;              // small ledge: step up
+    if (p.pos.y + 2.4 < b.bottom) continue;
+    const [cx, cz] = closestOnRect(b, p.pos.x, p.pos.z);
+    const dx = p.pos.x - cx, dz = p.pos.z - cz, d2 = dx * dx + dz * dz;
+    if (d2 >= BODY_R * BODY_R) continue;
+    if (d2 > 1e-10) {
+      const d = Math.sqrt(d2), nx = dx / d, nz = dz / d;
+      p.pos.x = cx + nx * BODY_R; p.pos.z = cz + nz * BODY_R;
+      const vn = p.vel.x * nx + p.vel.z * nz; if (vn < 0) { p.vel.x -= nx * vn; p.vel.z -= nz * vn; }
+    } else { // inside the block: push out the shortest way
+      const opts = [[b.x0 - BODY_R, null], [b.x1 + BODY_R, null], [null, b.z0 - BODY_R], [null, b.z1 + BODY_R]];
+      let best = opts[0], bd = 1e9;
+      for (const o of opts) { const dd = o[0] !== null ? Math.abs(o[0] - p.pos.x) : Math.abs(o[1] - p.pos.z); if (dd < bd) { bd = dd; best = o; } }
+      if (best[0] !== null) p.pos.x = best[0]; else p.pos.z = best[1];
+    }
+  }
+  const g = roofTopUnder(p.pos.x, p.pos.z, Math.max(oy, p.pos.y) + stepY);
+  if (g && p.pos.y <= g.top) { p.pos.y = g.top; if (p.vel.y < 0) p.vel.y = 0; p.onGround = true; }
+}
+// segment vs one block: where it enters and through which face
+function segBox(a, b2, bx) {
+  const d = [b2.x - a.x, b2.y - a.y, b2.z - a.z], A = [a.x, a.y, a.z];
+  const mins = [bx.x0, bx.bottom, bx.z0], maxs = [bx.x1, bx.top, bx.z1];
+  let tmin = 0, tmax = 1, axis = -1, sign = 0;
+  for (let i = 0; i < 3; i++) {
+    if (Math.abs(d[i]) < 1e-9) { if (A[i] < mins[i] || A[i] > maxs[i]) return null; continue; }
+    let t1 = (mins[i] - A[i]) / d[i], t2 = (maxs[i] - A[i]) / d[i], s = -1;
+    if (t1 > t2) { const tt = t1; t1 = t2; t2 = tt; s = 1; }
+    if (t1 > tmin) { tmin = t1; axis = i; sign = s; }
+    tmax = Math.min(tmax, t2); if (tmin > tmax) return null;
+  }
+  if (axis < 0) return null;
+  const n = [0, 0, 0]; n[axis] = sign;
+  return { t: tmin, n: new V3(n[0], n[1], n[2]) };
+}
+function firstBoxHit(a, b2) {
+  let best = null;
+  for (const bx of ROOF_BOXES) { const h = segBox(a, b2, bx); if (h && (!best || h.t < best.t)) best = Object.assign(h, { box: bx }); }
+  return best;
+}
+function roofsTerrain(prev, pos) {
+  const h = firstBoxHit(prev, pos); if (!h) return null;
+  const at = prev.clone().lerp(pos, h.t), b = h.box;
+  const m = Math.min(0.6, (b.x1 - b.x0) / 2, (b.z1 - b.z0) / 2);
+  const inside = (v) => { v.x = Math.max(b.x0 + m, Math.min(v.x, b.x1 - m)); v.z = Math.max(b.z0 + m, Math.min(v.z, b.z1 - m)); return v; };
+  if (h.n.y > 0.5) return { at, goal: inside(at.clone().setY(b.top + 0.7)) };               // landed on top
+  if (h.n.y < -0.5) return null;                                                           // underside: nothing to grab
+  return { at, goal: inside(at.clone().addScaledVector(h.n, -0.9).setY(b.top + 0.7)) };    // a wall: climb onto the top
+}
+
+// visuals
+const roofsG = new THREE.Group(); roofsG.visible = false; scene.add(roofsG);
+{
+  // plaster walls with arched lattice windows (one tile = 4.5 m wide, one storey band)
+  const winTex = (trim) => canvasTex(256, 256, (x, w) => {
+    x.fillStyle = '#efdcbf'; x.fillRect(0, 0, w, w); speckle(x, w, w, 400, '150,100,55', 0.02, 0.06);
+    x.fillStyle = 'rgba(120,70,30,.16)'; x.fillRect(0, 238, w, 8);
+    for (const cx of [64, 192]) {
+      x.fillStyle = trim; x.beginPath(); x.moveTo(cx - 32, 210); x.lineTo(cx - 32, 112); x.arc(cx, 112, 32, Math.PI, 0); x.lineTo(cx + 32, 210); x.closePath(); x.fill();
+      x.fillStyle = '#2b2430'; x.beginPath(); x.moveTo(cx - 24, 204); x.lineTo(cx - 24, 114); x.arc(cx, 114, 24, Math.PI, 0); x.lineTo(cx + 24, 204); x.closePath(); x.fill();
+      x.strokeStyle = trim; x.lineWidth = 3;
+      for (let i = -3; i <= 3; i++) { x.beginPath(); x.moveTo(cx + i * 9 - 28, 204); x.lineTo(cx + i * 9 + 28, 106); x.stroke(); x.beginPath(); x.moveTo(cx + i * 9 + 28, 204); x.lineTo(cx + i * 9 - 28, 106); x.stroke(); }
+    }
+  });
+  const ROOF_WIN_TEX = [winTex('#2f63a8'), winTex('#2e8f8a'), winTex('#3b4a9e')];
+  const G0 = ROOFS.ground;
+  const tileTex = canvasTex(256, 256, (x, w) => {
+    x.fillStyle = '#e8d6b6'; x.fillRect(0, 0, w, w);
+    x.strokeStyle = 'rgba(120,85,50,.25)'; x.lineWidth = 3;
+    for (let i = 0; i <= 4; i++) { x.beginPath(); x.moveTo(i * 64, 0); x.lineTo(i * 64, w); x.stroke(); x.beginPath(); x.moveTo(0, i * 64); x.lineTo(w, i * 64); x.stroke(); }
+    speckle(x, w, w, 500, '120,80,40', 0.02, 0.07);
+  });
+  const plankTex = canvasTex(128, 256, (x, w, h) => {
+    for (let i = 0; i < 8; i++) { const l = rnd(-14, 12); x.fillStyle = `rgb(${132 + l},${92 + l},${58 + l})`; x.fillRect(0, i * 32, w, 30); }
+    x.fillStyle = 'rgba(40,25,10,.6)'; for (let i = 0; i < 8; i++) x.fillRect(0, i * 32 + 30, w, 2);
+  });
+  const trimM = lam(0xf6e9d3), lowM = lam(0x7d5c44), capM = lam(0x3a2c24), postM = lam(0x5a3d25);
+  const edge = (x, z, w, d, y) => { const e = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, d), glowMat); e.position.set(x, y + 0.03, z); roofsG.add(e); };
+  ROOF_BOXES.forEach((b, i) => {
+    const w = b.x1 - b.x0, d = b.z1 - b.z0, cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
+    if (b.kind === 'roof') {
+      const upperH = 5, lowH = b.top - upperH - G0;
+      roofsG.add(mesh(new THREE.BoxGeometry(w, lowH, d), lowM, cx, G0 + lowH / 2, cz));
+      const tint = new THREE.Color().setHSL(rnd(0.085, 0.1), rnd(0.4, 0.6), rnd(0.8, 0.87));
+      const wt = ROOF_WIN_TEX[i % 3];
+      const sx = lam(tint, { map: cloneTex(wt, Math.max(1, Math.round(d / 4.5)), 1) }), sz = lam(tint, { map: cloneTex(wt, Math.max(1, Math.round(w / 4.5)), 1) });
+      const top = lam(0xffffff, { map: cloneTex(tileTex, w / 3, d / 3) });
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, upperH, d), [sx, sx, top, lowM, sz, sz]);
+      m.position.set(cx, b.top - upperH / 2, cz); m.castShadow = m.receiveShadow = true; roofsG.add(m);
+      roofsG.add(mesh(new THREE.BoxGeometry(w + 0.25, 0.28, d + 0.25), trimM, cx, b.top - 0.5, cz));
+      edge(cx, b.z0 + 0.03, w, 0.06, b.top); edge(cx, b.z1 - 0.03, w, 0.06, b.top);
+      edge(b.x0 + 0.03, cz, 0.06, d, b.top); edge(b.x1 - 0.03, cz, 0.06, d, b.top);
+      if (b.id === 'C') { // the high roof gets a blue dome corner and a flag
+        roofsG.add(mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.2, 6), postM, b.x0 + 0.5, b.top + 1.6, b.z0 + 0.5));
+        const flag = mesh(new THREE.PlaneGeometry(1.2, 0.7), lam(0x3d6fb0, { side: THREE.DoubleSide }), b.x0 + 1.1, b.top + 2.8, b.z0 + 0.5); roofsG.add(flag);
+      }
+    } else if (b.kind === 'bridge') {
+      roofsG.add(mesh(new THREE.BoxGeometry(w, 0.25, d), lam(0xffffff, { map: cloneTex(plankTex, 1, Math.max(1, Math.round(d / 1.5))) }), cx, b.top - 0.125, cz));
+      for (const [px, pz] of [[b.x0, b.z0], [b.x1, b.z0], [b.x0, b.z1], [b.x1, b.z1]]) roofsG.add(mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.9, 6), postM, px, b.top - 0.4, pz));
+      if (w < d) { edge(b.x0 + 0.03, cz, 0.06, d, b.top); edge(b.x1 - 0.03, cz, 0.06, d, b.top); }
+      else { edge(cx, b.z0 + 0.03, w, 0.06, b.top); edge(cx, b.z1 - 0.03, w, 0.06, b.top); }
+    } else {
+      const h = b.top - b.base;
+      roofsG.add(mesh(new THREE.BoxGeometry(w, h, d), lam(0xe9d6b8, { map: plasterTex }), cx, b.base + h / 2, cz));
+      roofsG.add(mesh(new THREE.BoxGeometry(w + 0.2, 0.18, d + 0.2), capM, cx, b.top - 0.09, cz));
+    }
+  });
+  // alley floor far below, the town around and the sea
+  const alley = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), lam(0x3b2a1f)); alley.rotation.x = -Math.PI / 2; alley.position.y = G0; roofsG.add(alley);
+  const sea = new THREE.Mesh(new THREE.CircleGeometry(400, 48), lam(0x4b88ad)); sea.rotation.x = -Math.PI / 2; sea.position.y = G0 - 0.5; roofsG.add(sea);
+  const roofM = lam(0x3d6fb0), whiteM = lam(0xf2ead9);
+  for (let i = 0; i < 46; i++) {
+    const a = rnd(0, Math.PI * 2), r = rnd(24, 60), h = rnd(8, 15) + (r > 45 ? rnd(0, 8) : 0), w = rnd(6, 11), d = rnd(6, 11);
+    const tint = new THREE.Color().setHSL(rnd(0.07, 0.1), rnd(0.3, 0.5), rnd(0.74, 0.88)), wt = ROOF_WIN_TEX[i % 3];
+    const sx = lam(tint, { map: cloneTex(wt, Math.max(1, Math.round(d / 4.5)), Math.max(1, Math.round(h / 5))) }), sz = lam(tint, { map: cloneTex(wt, Math.max(1, Math.round(w / 4.5)), Math.max(1, Math.round(h / 5))) });
+    const bx = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [sx, sx, lam(0xffffff, { map: cloneTex(tileTex, w / 3, d / 3) }), lowM, sz, sz]);
+    bx.position.set(Math.cos(a) * r, G0 + h / 2, Math.sin(a) * r); bx.castShadow = bx.receiveShadow = true;
+    bx.rotation.y = rnd(0, Math.PI); roofsG.add(bx);
+    bx.add(mesh(new THREE.BoxGeometry(w + 0.3, 0.35, d + 0.3), whiteM, 0, h / 2 + 0.17, 0));
+    if (i % 4 === 0) bx.add(mesh(new THREE.SphereGeometry(Math.min(w, d) * 0.33, 18, 9, 0, Math.PI * 2, 0, Math.PI / 2), roofM, 0, h / 2 + 0.35, 0));
+  }
+  const trunkM = lam(0x8a6038), leafM = lam(0x4f7d32, { side: THREE.DoubleSide });
+  for (const [px, pz] of [[-4.5, 4.5], [4.5, -4.5], [15.5, 4], [-15.5, -4], [4, -15.5], [-6.5, 15.5]]) {
+    const palm = new THREE.Group(); palm.position.set(px, G0, pz);
+    const th = rnd(14, 16.5); palm.add(mesh(new THREE.CylinderGeometry(0.25, 0.42, th, 8), trunkM, 0, th / 2, 0));
+    for (let k = 0; k < 8; k++) { const leaf = mesh(new THREE.ConeGeometry(0.6, 4.6, 4), leafM, 0, th, 0); leaf.scale.z = 0.15; leaf.rotation.set(0, (k / 8) * Math.PI * 2, 1.85); leaf.translateY(2.2); palm.add(leaf); }
+    roofsG.add(palm);
+  }
+  const rockM = new THREE.MeshLambertMaterial({ color: 0xc98552, flatShading: true });
+  for (let i = 0; i < 7; i++) {
+    const a = rnd(0, Math.PI * 2), r = rnd(170, 230), s = rnd(18, 30);
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 1), rockM);
+    rock.position.set(Math.cos(a) * r, G0 - 12 + rnd(-4, 4), Math.sin(a) * r); rock.scale.set(rnd(0.9, 1.4), rnd(1.1, 1.8), rnd(0.9, 1.4)); roofsG.add(rock);
+  }
+}
+
+// ---------- the two maps behind one interface ----------
+function wellSpawn(p) {
+  let best = null, bestD = -1;
+  for (let k = 0; k < 8; k++) {
+    const a = safeSpots.length ? safeSpots[(Math.random() * safeSpots.length) | 0] + rnd(-0.1, 0.1) : Math.random() * Math.PI * 2;
+    const r = rnd(OUTER_R - 3, OUTER_R - 1.3), c = new V3(Math.cos(a) * r, 0, Math.sin(a) * r);
+    let md = 99; for (const q of pigs) if (q !== p && q.state !== 'dead') md = Math.min(md, q.pos.distanceTo(c));
+    if (md > bestD) { bestD = md; best = c; }
+  }
+  return best;
+}
+function roofsSpawn(p) {
+  let best = null, bestD = -1;
+  for (let k = 0; k < 10; k++) {
+    const c = randInRoof(RING[(Math.random() * RING.length) | 0], 1.6);
+    let md = 99; for (const q of pigs) if (q !== p && q.state !== 'dead') md = Math.min(md, q.pos.distanceTo(c));
+    if (md > bestD) { bestD = md; best = c; }
+  }
+  return best;
+}
+const MAPS = {
+  well: {
+    id: 'well', name: 'Ilios Well', group: wellG, killY: KILL_Y, word: 'PIT', fell: 'fell in',
+    cam: { r: 13, h: 8.5, look: -1 },
+    collide: (p, ox, oy, oz) => collideWell(p, ox, oy, oz),
+    spawn: wellSpawn,
+    rimSpot: () => { const a = Math.random() * Math.PI * 2, r = INNER + 1.1; return new V3(Math.cos(a) * r, 0, Math.sin(a) * r); },
+    deadlyEnd: (e) => Math.hypot(e.x, e.z) < PIT_R - 0.4,
+    nearDanger: (q) => Math.hypot(q.pos.x, q.pos.z) < INNER + 1.6,
+    rescue(b) {
+      const r = Math.hypot(b.pos.x, b.pos.z) || 1;
+      if (!(b.pos.y < -0.2 && r < PIT_R)) return null;
+      const wx = b.pos.x / r, wz = b.pos.z / r;
+      return { wx, wz, aim: new V3(wx * PIT_R, rnd(-0.6, 0.2), wz * PIT_R) };
+    },
+    botGoal(b, ai) {
+      const nearRim = Math.random() < 0.8, a = Math.atan2(b.pos.z, b.pos.x) + rnd(-0.9, 0.9);
+      const gr = nearRim ? rnd(INNER + 0.7, INNER + 1.3) : rnd(INNER + 2.5, OUTER_R - 1.5);
+      ai.goal.set(Math.cos(a) * gr, 0, Math.sin(a) * gr); ai.goalRoof = null;
+    },
+    reachable: () => true,
+    edgeJump: null,
+    allowPush: () => true,
+    hookBlocked(prev, pos) {
+      const r = Math.hypot(pos.x, pos.z);
+      return (pos.y < 0 && r >= INNER) || (pos.y < CURB_H && r >= PIT_R && r < INNER) || r > OUTER_R + 1;
+    },
+    terrain: (prev, pos) => terrainHit(prev, pos),
+    clampGoal(goal) { const gr = Math.hypot(goal.x, goal.z), maxR = OUTER_R - 0.9; if (gr > maxR) { goal.x *= maxR / gr; goal.z *= maxR / gr; } },
+    pickupSpot() { const a = rnd(0, Math.PI * 2), r = rnd(INNER + 1.6, OUTER_R - 1.8); return [Math.cos(a) * r, Math.sin(a) * r, 0]; }
+  },
+  roofs: {
+    id: 'roofs', name: ROOFS.name, group: roofsG, killY: ROOFS.killY, word: 'DROP', fell: 'fell off',
+    cam: { r: 21, h: 13, look: -2 },
+    collide: collideRoofs,
+    spawn: roofsSpawn,
+    rimSpot() { const b = RING[(Math.random() * RING.length) | 0]; return pointToward(b, 0, 0, 0.9, rnd(-1.5, 1.5)); },
+    deadlyEnd: (e) => !roofTopUnder(e.x, e.z, e.y + 0.05),
+    nearDanger(q) { const b = roofAt(q.pos); return !b || edgeDist(b, q.pos.x, q.pos.z) < 1.6; },
+    rescue(b) {
+      if (b.onGround || roofTopUnder(b.pos.x, b.pos.z, b.pos.y + 0.05)) return null;
+      let best = null, bd = 1e9;
+      for (const r of WALKABLE) { const [cx, cz] = closestOnRect(r, b.pos.x, b.pos.z); const d = Math.hypot(cx - b.pos.x, cz - b.pos.z); if (d < bd) { bd = d; best = { r, cx, cz }; } }
+      if (!best || b.pos.y > best.r.top - 0.3) return null; // still above roof level: a normal jump, not a fall
+      const dx = best.cx - b.pos.x, dz = best.cz - b.pos.z, L = Math.hypot(dx, dz) || 1;
+      return { wx: dx / L, wz: dz / L, aim: new V3(best.cx + dx / L * 0.3, best.r.top - 0.5, best.cz + dz / L * 0.3) };
+    },
+    botGoal(b, ai) {
+      const cur = roofAt(b.pos) || RING[0];
+      let tgt = cur;
+      if (cur.breathLinks.length && b.breathCd <= 0 && Math.random() < 0.08) tgt = cur.breathLinks[(Math.random() * cur.breathLinks.length) | 0];
+      else if (cur.links.length && Math.random() < 0.35) tgt = cur.links[(Math.random() * cur.links.length) | 0];
+      if (tgt === cur) ai.goal.copy(Math.random() < 0.65 ? pointToward(cur, rnd(-3, 3), rnd(-3, 3), 0.9, rnd(-2, 2)) : randInRoof(cur, Math.min(1, (cur.x1 - cur.x0) / 2 - 0.1, (cur.z1 - cur.z0) / 2 - 0.1)));
+      else ai.goal.copy(pointToward(tgt, b.pos.x, b.pos.z, 1.6, rnd(-1, 1)));
+      ai.goalRoof = tgt;
+    },
+    reachable(b, pos, ai) {
+      const cur = roofAt(b.pos), there = roofTopUnder(pos.x, pos.z, pos.y + 0.2, WALKABLE);
+      if (!cur || !there) return false;
+      if (there === cur || cur.links.includes(there)) { ai.goalRoof = there; return true; }
+      return false;
+    },
+    edgeJump(b, wx, wz) {
+      if (!b.onGround || (!wx && !wz)) return null;
+      if (roofTopUnder(b.pos.x + wx * 0.9, b.pos.z + wz * 0.9, b.pos.y + ROOF_STEP)) return null; // ground ahead
+      const cur = roofAt(b.pos), goal = b.ai.goalRoof;
+      if (!goal || goal === cur) return 'stop';
+      // only jump if the other roof is within reach along this direction
+      let reach = null;
+      for (let d = 0.5; d <= 5; d += 0.25) if (inRect(goal, b.pos.x + wx * d, b.pos.z + wz * d, 0.35)) { reach = d; break; }
+      const up = goal.top - b.pos.y;
+      if (reach === null || reach > (up > 0.8 ? 4.6 : 4.0)) return 'stop';
+      if (up > 0.8) return b.breathCd <= 0 ? 'breath' : 'stop';
+      return 'jump';
+    },
+    allowPush: (p, x, z) => !p.onGround || !!roofTopUnder(x, z, p.pos.y + 0.1),
+    hookBlocked: (prev, pos) => !!firstBoxHit(prev, pos) || pos.y < ROOFS.ground,
+    terrain: roofsTerrain,
+    clampGoal() {},
+    pickupSpot() { const roofs = WALKABLE.filter((b) => b.kind === 'roof'); const b = roofs[(Math.random() * roofs.length) | 0]; const v = randInRoof(b, 1.2); return [v.x, v.z, b.top]; }
+  }
+};
+let MAP = MAPS.well;
+function setMap(id) {
+  MAP = MAPS[id] || MAPS.well;
+  for (const m of Object.values(MAPS)) m.group.visible = m === MAP;
+  grappleSurfaces = MAP.id === 'well' ? wellSurfaces : [];
+}
 
 // ---------- pigs ----------
 function makePig(skin, pants) {
@@ -470,7 +757,7 @@ function pullEnd(hooker, target) {
   const end = hooker.pos.clone().addScaledVector(d, gap); end.y = hooker.pos.y + 1.0;
   return { end, dir: d, gap };
 }
-function endInPit(h, t) { const { end } = pullEnd(h, t); return Math.hypot(end.x, end.z) < PIT_R - 0.4; }
+function endInPit(h, t) { const { end } = pullEnd(h, t); return MAP.deadlyEnd(end); }
 
 // ---------- game state ----------
 const game = { state: 'menu', target: 15, diff: 'normal', T: 0, practice: true, dummy: true, online: false };
@@ -478,16 +765,9 @@ const practiceOn = () => game.practice && (game.state === 'playing' || game.stat
 let D = DIFF.normal;
 
 function spawn(p) {
-  let best = null, bestD = -1;
-  for (let k = 0; k < 8; k++) {
-    const a = safeSpots.length ? safeSpots[(Math.random() * safeSpots.length) | 0] + rnd(-0.1, 0.1) : Math.random() * Math.PI * 2;
-    const r = rnd(OUTER_R - 3, OUTER_R - 1.3), c = new V3(Math.cos(a) * r, 0, Math.sin(a) * r);
-    let md = 99; for (const q of pigs) if (q !== p && q.state !== 'dead') md = Math.min(md, q.pos.distanceTo(c));
-    if (md > bestD) { bestD = md; best = c; }
-  }
-  p.pos.copy(best); p.vel.set(0, 0, 0); p.state = 'alive'; p.stunT = 0; p.protect = 1.2; p.hook = null; p.pull = null;
+  p.pos.copy(MAP.spawn(p)); p.vel.set(0, 0, 0); p.state = 'alive'; p.stunT = 0; p.protect = 1.2; p.hook = null; p.pull = null;
   p.lastHooker = null; p.meleeT = 0; p.knockT = 0; p.hookCd = p.isPlayer ? 0 : rnd(1, 3); p.breathCd = 0; p.onGround = true;
-  if (!p.isPlayer && practiceOn() && game.dummy) { const a = Math.random() * Math.PI * 2, r = INNER + 1.1; p.pos.set(Math.cos(a) * r, 0, Math.sin(a) * r); p.protect = 0; }
+  if (!p.isPlayer && practiceOn() && game.dummy) { p.pos.copy(MAP.rimSpot()); p.protect = 0; }
   p.yaw = Math.atan2(-p.pos.x, -p.pos.z); p.pitch = -0.12;
   p.ai.tgt = null; p.ai.goalT = 0; p.ai.save = undefined;
   if (p.mesh) p.mesh.visible = true;
@@ -607,10 +887,14 @@ function stepBody(p, dt, wx, wz, jump) {
   }
   if (jump && p.onGround) { p.vel.y = JUMP; p.onGround = false; if (p.isPlayer) sfx.jump(); }
   p.vel.y -= G * dt;
-  const oldR = Math.hypot(p.pos.x, p.pos.z), oldY = p.pos.y;
+  const ox = p.pos.x, oy = p.pos.y, oz = p.pos.z, wasGround = p.onGround;
   p.pos.addScaledVector(p.vel, dt);
-  let r = Math.hypot(p.pos.x, p.pos.z);
   p.onGround = false;
+  MAP.collide(p, ox, oy, oz, wasGround);
+}
+function collideWell(p, ox, oy, oz) {
+  const oldR = Math.hypot(ox, oz), oldY = oy;
+  let r = Math.hypot(p.pos.x, p.pos.z);
   if (r > OUTER_R - BODY_R) { setR(p, OUTER_R - BODY_R); r = OUTER_R - BODY_R; }
   if (r >= INNER) {
     if (p.pos.y <= 0) { p.pos.y = 0; if (p.vel.y < 0) p.vel.y = 0; p.onGround = true; }
@@ -640,12 +924,12 @@ function botThink(b, dt) {
   if (practiceOn() && game.dummy) return [0, 0, false];
   const ai = b.ai; let wx = 0, wz = 0, jump = false;
   if (b.stunT > 0) return [0, 0, false];
-  const r = Math.hypot(b.pos.x, b.pos.z) || 1;
-  if (b.pos.y < -0.2 && r < PIT_R) {
+  const res = MAP.rescue(b);
+  if (res) {
     if (ai.save === undefined) { ai.save = Math.random() < D.save; ai.saveT = rnd(0.12, 0.45); }
-    ai.saveT -= dt; wx = b.pos.x / r; wz = b.pos.z / r;
+    ai.saveT -= dt; wx = res.wx; wz = res.wz;
     if (ai.save && ai.saveT <= 0) breathe(b, wx, wz);
-    if (b.hasGrapple && !b.grapple && ai.saveT <= -0.15 && b.breathCd > 0.5) { const o = center(b); fireGrapple(b, o, new V3(wx * PIT_R, rnd(-0.6, 0.2), wz * PIT_R).sub(o)); }
+    if (b.hasGrapple && !b.grapple && ai.saveT <= -0.15 && b.breathCd > 0.5) { const o = center(b); fireGrapple(b, o, res.aim.clone().sub(o)); }
     b.yaw = Math.atan2(wx, wz);
     return [wx, wz, false];
   }
@@ -675,21 +959,20 @@ function botThink(b, dt) {
     if (best !== ai.tgt) { ai.tgt = best; ai.aimT = D.react * rnd(0.7, 1.4); }
   }
   if (ai.goalT <= 0 || Math.hypot(ai.goal.x - b.pos.x, ai.goal.z - b.pos.z) < 0.8) {
-    const nearRim = Math.random() < 0.8, a = Math.atan2(b.pos.z, b.pos.x) + rnd(-0.9, 0.9);
-    const gr = nearRim ? rnd(INNER + 0.7, INNER + 1.3) : rnd(INNER + 2.5, OUTER_R - 1.5);
-    ai.goal.set(Math.cos(a) * gr, 0, Math.sin(a) * gr); ai.goalT = rnd(2, 5);
-    if (pickup.active && !b.hasGrapple && Math.random() < 0.3) { ai.goal.copy(pickup.pos); ai.goalT = 6; }
+    MAP.botGoal(b, ai); ai.goalT = rnd(2, 5);
+    if (pickup.active && !b.hasGrapple && Math.random() < 0.3 && MAP.reachable(b, pickup.pos, ai)) { ai.goal.copy(pickup.pos); ai.goalT = 6; }
   }
   const t = ai.tgt;
   const rooted = b.hook && b.hook.phase === 'pull';
   if (!rooted) {
     const gx = ai.goal.x - b.pos.x, gz = ai.goal.z - b.pos.z, gl = Math.hypot(gx, gz);
     if (gl > 0.5) { wx = gx / gl; wz = gz / gl; }
-    if (b.onGround && Math.random() < 0.004) jump = true;
+    if (b.onGround && !MAP.edgeJump && Math.random() < 0.004) jump = true; // idle hops are deadly on rooftops
+    if (MAP.edgeJump) { const j = MAP.edgeJump(b, wx, wz); if (j === 'stop') { wx = wz = 0; ai.goalT = 0; } else if (j === 'jump') jump = true; else if (j === 'breath') breathe(b, wx, wz); }
   }
   if (b.meleeT <= 0 && !rooted) {
     const q = meleeTarget(b);
-    if (q && Math.random() < dt * (Math.hypot(q.pos.x, q.pos.z) < INNER + 1.6 ? 5 : 0.8)) melee(b);
+    if (q && Math.random() < dt * (MAP.nearDanger(q) ? 5 : 0.8)) melee(b);
   }
   let face = (wx || wz) ? Math.atan2(wx, wz) : b.yaw;
   if (t && t.state === 'alive') {
@@ -770,13 +1053,13 @@ function moveWish() {
 // ---------- HUD ----------
 const $ = (id) => document.getElementById(id);
 const gasfx = $('gasfx'), hurtfx = $('hurtfx');
-const HOOK_SVG = '<span class="pit">⟶ PIT</span>';
+const HOOK_SVG = () => `<span class="pit">⟶ ${MAP.word}</span>`;
 function esc(s) { return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
 function feed(k, v) {
   if (game.state !== 'playing') return;
   const d = document.createElement('div');
   const nm = (p) => `<b class="${p.isPlayer ? 'me' : ''}">${esc(p.name)}</b>`;
-  d.innerHTML = k ? `${nm(k)}${HOOK_SVG}${nm(v)}` : `${nm(v)}<span class="pit">fell in</span>`;
+  d.innerHTML = k ? `${nm(k)}${HOOK_SVG()}${nm(v)}` : `${nm(v)}<span class="pit">${MAP.fell}</span>`;
   const f = $('feed'); f.prepend(d); while (f.children.length > 5) f.lastChild.remove();
   setTimeout(() => d.remove(), 5000);
 }
@@ -915,6 +1198,13 @@ $('mode').addEventListener('click', (e) => { const b = e.target.closest('button'
 try { $('pname').value = localStorage.getItem('ptp-name') || ''; } catch (e) { /* storage unavailable */ }
 $('pbot').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setDummy(b.dataset.v === 'dummy'); });
 function setDummy(v) { game.dummy = v; setPressed('pbot', v ? 'dummy' : 'combat'); toast(v ? 'Practice bot: dummy' : 'Practice bot: combat'); }
+game.mapId = 'well';
+$('mapsel').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b || b.dataset.v === game.mapId) return;
+  game.mapId = b.dataset.v; setPressed('mapsel', game.mapId); setMap(game.mapId);
+  resetPickup();
+  for (const p of pigs) if (!p.isPlayer) { p.hook = null; p.pull = null; p.state = 'alive'; spawn(p); }
+});
 $('tgt').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { game.target = +b.dataset.v; setPressed('tgt', b.dataset.v); } });
 if (matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches) $('mnote').textContent = 'Pull The Pig needs a keyboard and mouse.';
 
@@ -924,7 +1214,7 @@ async function startGame() {
     const name = ($('pname').value || '').trim() || 'Pig';
     try { localStorage.setItem('ptp-name', name); } catch (e) { /* storage unavailable */ }
     $('mnote').textContent = 'Connecting to ' + SERVER_URL + '…';
-    try { await net.connect(name); }
+    try { await net.connect(name, game.mapId); }
     catch (e) { $('mnote').textContent = 'Could not reach the game server at ' + SERVER_URL + '. Start it with "npm run dev" and try again.'; return; }
     $('mnote').textContent = 'Click Play to lock the mouse. Press Esc to pause.';
   }
@@ -1036,9 +1326,9 @@ const pickupClaw = makeClaw(2.4, lam(GRAP_COLOR, { emissive: 0x1a6f8f })); picku
 sfx.grapThrow = (p) => { const v = vol(p); hiss(0.25, 0.3 * v, 2000, 5200); tone(480, 0.15, 'triangle', 0.08 * v, 1500); };
 sfx.grapHit = (p) => { const v = vol(p); tone(950, 0.12, 'square', 0.07 * v, 380); hiss(0.1, 0.3 * v, 3200, 1400); };
 sfx.pickup = (p) => { const v = vol(p); [660, 880, 1320].forEach((f, i) => tone(f, 0.2, 'triangle', 0.16 * v, null, i * 0.07)); };
-function placePickup(x, z) { pickup.active = true; pickup.pos.set(x, 0, z); pickupG.position.set(x, 0, z); pickupG.visible = true; }
+function placePickup(x, z, y = 0) { pickup.active = true; pickup.pos.set(x, y, z); pickupG.position.set(x, y, z); pickupG.visible = true; }
 function hidePickup() { pickup.active = false; pickupG.visible = false; }
-function randomPickupSpot() { const a = rnd(0, Math.PI * 2), r = rnd(INNER + 1.6, OUTER_R - 1.8); return [Math.cos(a) * r, Math.sin(a) * r]; }
+function randomPickupSpot() { return MAP.pickupSpot(); }
 function resetPickup() { hidePickup(); pickup.timer = 3; for (const p of pigs) { p.hasGrapple = false; p.grapple = null; } }
 function grantGrapple(p) {
   p.hasGrapple = true; sfx.pickup(p.pos);
@@ -1049,18 +1339,18 @@ let grabAskT = 0;
 function updatePickup(dt) {
   if (net.room) {
     const s = net.pickup();
-    if (s && s.active) { if (!pickup.active || pickup.pos.x !== s.x || pickup.pos.z !== s.z) placePickup(s.x, s.z); }
+    if (s && s.active) { if (!pickup.active || pickup.pos.x !== s.x || pickup.pos.z !== s.z) placePickup(s.x, s.z, s.y || 0); }
     else if (pickup.active) hidePickup();
     if (pickup.active && game.state === 'playing' && player.state === 'alive' && !player.hasGrapple && !player.grapple &&
-        Math.hypot(player.pos.x - pickup.pos.x, player.pos.z - pickup.pos.z) < PICKUP_R && player.pos.y < 2 && performance.now() > grabAskT) {
+        Math.hypot(player.pos.x - pickup.pos.x, player.pos.z - pickup.pos.z) < PICKUP_R && Math.abs(player.pos.y - pickup.pos.y) < 2 && performance.now() > grabAskT) {
       grabAskT = performance.now() + 800; net.send('grab', {});
     }
     return;
   }
-  if (!pickup.active) { pickup.timer -= dt; if (pickup.timer <= 0) { const [x, z] = randomPickupSpot(); placePickup(x, z); } return; }
+  if (!pickup.active) { pickup.timer -= dt; if (pickup.timer <= 0) { const [x, z, y] = randomPickupSpot(); placePickup(x, z, y); } return; }
   for (const p of pigs) {
     if (p.state !== 'alive' || p.hasGrapple || p.grapple) continue;
-    if (Math.hypot(p.pos.x - pickup.pos.x, p.pos.z - pickup.pos.z) < PICKUP_R && p.pos.y < 2) {
+    if (Math.hypot(p.pos.x - pickup.pos.x, p.pos.z - pickup.pos.z) < PICKUP_R && Math.abs(p.pos.y - pickup.pos.y) < 2) {
       hidePickup(); pickup.timer = PICKUP_RESPAWN; grantGrapple(p); break;
     }
   }
@@ -1100,8 +1390,7 @@ function buildingHit(prev, pos) {
   if (n.y > 0.6) goal = at.clone().add(new V3(0, 0.7, 0));                         // rooftop or top edge
   else goal = at.clone().addScaledVector(new V3(n.x, 0, n.z).normalize(), 0.9).add(new V3(0, -1.3, 0)); // wall face
   // you can't leave the courtyard yet, so far-away surfaces pull you up to that height at the courtyard edge
-  const gr = Math.hypot(goal.x, goal.z), maxR = OUTER_R - 0.9;
-  if (gr > maxR) { goal.x *= maxR / gr; goal.z *= maxR / gr; }
+  MAP.clampGoal(goal);
   goal.y = Math.max(goal.y, 0.75);
   return { at, goal };
 }
@@ -1146,7 +1435,7 @@ function updateGrapples(dt) {
         if (p.isPlayer) toast('Zipping to ' + hit.name);
         if (g.id && net.room) net.send('grap_upd', { id: g.id, s: 'attach', tgt: hit.isRemote ? hit.id : undefined });
       } else {
-        const th = buildingHit(g.prev, g.pos) || terrainHit(g.prev, g.pos);
+        const th = buildingHit(g.prev, g.pos) || MAP.terrain(g.prev, g.pos);
         if (th) {
           g.phase = 'pull'; g.pos.copy(th.at); g.goal = th.goal; sfx.grapHit(th.at);
           puff(th.at.clone(), 0xd8c4a0, 4, 0.6);
@@ -1195,7 +1484,7 @@ function update(dt) {
       if (p.hook && p.hook.phase === 'pull') w = [0, 0, false];
       stepBody(p, dt, w[0], w[1], w[2]);
     }
-    if (p.pos.y < KILL_Y) eliminate(p);
+    if (p.pos.y < MAP.killY) eliminate(p);
   }
   // hooks
   const tmp = new V3();
@@ -1218,7 +1507,7 @@ function update(dt) {
       }
       if (h.phase === 'out') {
         const r = Math.hypot(h.pos.x, h.pos.z);
-        if (h.dist > HOOK_RANGE || (h.pos.y < 0 && r >= INNER) || (h.pos.y < CURB_H && r >= PIT_R && r < INNER) || r > OUTER_R + 1) { h.phase = 'back'; if (h.dist <= HOOK_RANGE) sfx.clank(h.pos); }
+        if (h.dist > HOOK_RANGE || MAP.hookBlocked(prev, h.pos)) { h.phase = 'back'; if (h.dist <= HOOK_RANGE) sfx.clank(h.pos); }
       }
     } else if (h.phase === 'pull') {
       if (!h.target || h.target.state !== 'hooked') h.phase = 'back'; else center(h.target, h.pos);
@@ -1237,7 +1526,10 @@ function update(dt) {
     if (a.state !== 'alive' || b.state !== 'alive') continue;
     const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z, d = Math.hypot(dx, dz);
     if (d < 1.4 && d > 0.001 && Math.abs(a.pos.y - b.pos.y) < 1.8) {
-      const push = (1.4 - d) / 2; a.pos.x -= dx / d * push; a.pos.z -= dz / d * push; b.pos.x += dx / d * push; b.pos.z += dz / d * push;
+      const push = (1.4 - d) / 2;
+      // bumping into each other never shoves a pig off a roof edge (hooks and shoves still can)
+      if (MAP.allowPush(a, a.pos.x - dx / d * push, a.pos.z - dz / d * push)) { a.pos.x -= dx / d * push; a.pos.z -= dz / d * push; }
+      if (MAP.allowPush(b, b.pos.x + dx / d * push, b.pos.z + dz / d * push)) { b.pos.x += dx / d * push; b.pos.z += dz / d * push; }
     }
   }
 }
@@ -1295,12 +1587,12 @@ let orbitA = 0.6;
 function updateCamera(dt, t) {
   if (game.state === 'menu' || game.state === 'over') {
     orbitA += dt * 0.07;
-    camera.position.set(Math.cos(orbitA) * 13, 8.5, Math.sin(orbitA) * 13);
-    camera.lookAt(0, -1, 0);
+    camera.position.set(Math.cos(orbitA) * MAP.cam.r, MAP.cam.h, Math.sin(orbitA) * MAP.cam.r);
+    camera.lookAt(0, MAP.cam.look, 0);
     return;
   }
   const p = player;
-  const y = p.state === 'dead' ? Math.max(p.pos.y, KILL_Y + 2) : p.pos.y;
+  const y = p.state === 'dead' ? Math.max(p.pos.y, MAP.killY + 2) : p.pos.y;
   camera.position.set(p.pos.x, y + EYE, p.pos.z);
   camera.rotation.set(p.pitch, p.yaw + Math.PI, 0);
   // viewmodel motion

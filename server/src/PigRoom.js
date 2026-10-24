@@ -1,7 +1,8 @@
 const { Room } = require('colyseus');
 const { Player, PigState } = require('./schema');
+const MAPS = require('../../shared/maps.json');
 
-const MAX_R = 18;          // a little past the courtyard edge (17 m)
+const MAX_R = 24;          // a little past the edge of the largest map
 const MIN_Y = -30;
 const MAX_Y = 30;
 const HOOK_REACH = 28;     // hook range 21 m plus room for lag
@@ -23,7 +24,9 @@ const str = (s) => typeof s === 'string' && s.length > 0 && s.length < 64;
 // or knockback (and can answer "deflected"), and this room relays the messages, sanity-checks distances
 // and keeps the score.
 class PigRoom extends Room {
-  onCreate() {
+  onCreate(options) {
+    this.mapId = options && options.map === 'roofs' ? 'roofs' : 'well';
+    this.setMetadata({ map: this.mapId });
     this.maxClients = 12;
     this.setState(new PigState());
     this.setPatchRate(33); // send updates about 30 times a second
@@ -93,14 +96,21 @@ class PigRoom extends Room {
   }
 
   spawnPickup() {
-    const a = Math.random() * Math.PI * 2, r = INNER + 1.6 + Math.random() * (OUTER_R - 1.8 - INNER - 1.6);
     const pk = this.state.pickup;
-    pk.x = Math.cos(a) * r; pk.z = Math.sin(a) * r; pk.active = true;
+    if (this.mapId === 'roofs') {
+      const roofs = MAPS.roofs.boxes.filter((b) => b.kind === 'roof');
+      const b = roofs[(Math.random() * roofs.length) | 0], m = 1.2;
+      pk.x = b.x0 + m + Math.random() * (b.x1 - b.x0 - 2 * m); pk.z = b.z0 + m + Math.random() * (b.z1 - b.z0 - 2 * m); pk.y = b.top;
+    } else {
+      const a = Math.random() * Math.PI * 2, r = INNER + 1.6 + Math.random() * (OUTER_R - 1.8 - INNER - 1.6);
+      pk.x = Math.cos(a) * r; pk.z = Math.sin(a) * r; pk.y = 0;
+    }
+    pk.active = true;
   }
 
   onGrab(client) {
     const pk = this.state.pickup, p = this.state.players.get(client.sessionId);
-    if (!pk.active || !p || p.anim === 3 || Math.hypot(p.x - pk.x, p.z - pk.z) > PICKUP_REACH) return;
+    if (!pk.active || !p || p.anim === 3 || Math.hypot(p.x - pk.x, p.z - pk.z) > PICKUP_REACH || Math.abs(p.y - pk.y) > 3) return;
     pk.active = false; // first come, first served
     client.send('ev', { t: 'grab_ok' });
     this.broadcast('ev', { t: 'grabbed', from: client.sessionId }, { except: client });
