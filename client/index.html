@@ -55,7 +55,7 @@ html,body{height:100%;margin:0;overflow:hidden;background:#2a1d17;color:var(--in
 .cd .in{width:46px;height:46px;border-radius:50%;background:rgba(20,12,8,.85);display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:20px}
 .cd .lbl{font-family:var(--display);font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
 .cd.ready .ring{box-shadow:0 0 0 2px var(--c),0 0 14px var(--c)}
-#hookcd{--c:var(--hog)} #breathcd{--c:var(--gas)}
+#hookcd{--c:var(--hog)} #breathcd{--c:var(--gas)} #grapcd{--c:#4fd1ff}
 #you{bottom:calc(22px + env(safe-area-inset-bottom,0px));left:calc(22px + env(safe-area-inset-left,0px));font-family:var(--display);font-weight:800;font-size:22px;transform:skewX(-10deg)}
 #you small{display:block;font-size:13px;color:#ffd36a;letter-spacing:.08em}
 #gasfx{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(125,255,74,.45));opacity:0;transition:opacity .5s}
@@ -127,6 +127,7 @@ table.sb td.n{text-align:right;font-variant-numeric:tabular-nums}
   <div class="hud" id="you"></div>
   <div class="hud" id="cds">
     <div class="cd" id="breathcd"><div class="ring"><div class="in">E</div></div><div class="lbl">Breath</div></div>
+    <div class="cd ready" id="grapcd" hidden><div class="ring"><div class="in">R</div></div><div class="lbl">Grapple</div></div>
     <div class="cd" id="hookcd"><div class="ring"><div class="in">⇧</div></div><div class="lbl">Hook</div></div>
   </div>
   <div class="hud" id="tabsb" hidden></div>
@@ -142,6 +143,7 @@ table.sb td.n{text-align:right;font-variant-numeric:tabular-nums}
       <kbd>Shift</kbd><span>Chain hook: throw it at the crosshair and pull whoever it hits. Turn quickly right after it lands to drag them sideways, like into the pit.</span>
       <kbd>E</kbd><span>Breathing mask: one deep breath launches you upward. Use it to climb out of the pit.</span>
       <kbd>V / Mouse 4</kbd><span>Shove: swipe your hook to knock a pig backward. Push one off the rim and into the pit. Time the swipe into an incoming hook to deflect it and stun the thrower. Miss, and you're stuck mid-swing.</span>
+      <kbd>R</kbd><span>Grapple hook power-up: grab the glowing cyan claw on the plaza, then throw it once. It zips you to whatever it hits, wall, floor, rim or pig.</span>
       <kbd>Mouse</kbd><span>Look around. Hold Tab for the scoreboard.</span>
     </div>
     <div class="opts">
@@ -199,6 +201,7 @@ table.sb td.n{text-align:right;font-variant-numeric:tabular-nums}
       <li><b>Shove up close.</b> <kbd>V</kbd> or mouse button 4 swipes your hook and knocks a nearby pig back. Push pigs standing at the rim over the edge.</li>
       <li><b>Deflect hooks.</b> Swing your shove into an incoming hook just before it reaches you. It bounces back and the thrower is stunned. Miss, and you're stuck mid-swing.</li>
       <li><b>Breathe out of the pit.</b> Got pulled in? Press <kbd>E</kbd> fast. Your breathing mask launches you upward, and you can steer back over the rim. It has a 7-second cooldown.</li>
+      <li><b>Grab the grapple.</b> A glowing cyan claw appears somewhere on the plaza. Walk into it, then press <kbd>R</kbd> to throw it once. It zips you to whatever it hits: a wall, the floor, the rim (even from inside the pit), or another pig.</li>
     </ol>
     <p class="note">Move with <kbd>WASD</kbd>, jump with <kbd>Space</kbd>, hold <kbd>Tab</kbd> for scores, <kbd>Esc</kbd> to pause.</p>
     <div class="row2"><button class="go" id="hdone" type="button">Got it</button></div>

@@ -11,6 +11,7 @@ Twelve hogs, one hole. A first-person brawler for the browser, based on the Over
 | Shift | Chain hook. Turn quickly right after it lands to drag the pig sideways (hook flick). |
 | E | Breathing mask: launches you upward, so you can escape the pit |
 | V / Mouse 4 | Shove. Time it into an incoming hook to deflect it. |
+| R | Grapple hook power-up (one use): grab the glowing cyan claw on the plaza first. It zips you to whatever it hits, or to a pig. |
 | B | In Practice, switch the bot between Dummy and Combat |
 | Tab | Scoreboard |
 | Esc | Pause |

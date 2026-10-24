@@ -9,6 +9,10 @@ const SHOVE_REACH = 6;     // shove range 2.7 m plus room for lag
 const CREDIT_MS = 9000;    // a kill counts if the killer hooked or shoved you this recently
 const WIN_KILLS = 15;
 const ROUND_BREAK_MS = 7000;
+const PICKUP_FIRST_MS = 4000;     // first grapple appears this long after the room opens
+const PICKUP_RESPAWN_MS = 15000;  // and again this long after someone grabs it
+const PICKUP_REACH = 3;           // pickup radius 1.5 m plus room for lag
+const INNER = 7.9, OUTER_R = 17;
 
 const finite = (v, lo, hi, fallback) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fallback);
 const vec3 = (a) => Array.isArray(a) && a.length === 3 && a.every((n) => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) < 100);
@@ -25,6 +29,7 @@ class PigRoom extends Room {
     this.setPatchRate(33); // send updates about 30 times a second
     this.lastHit = new Map(); // victim id -> { by, t }
     this.roundOver = false;
+    this.clock.setTimeout(() => this.spawnPickup(), PICKUP_FIRST_MS);
 
     this.onMessage('move', (client, m) => {
       const p = this.state.players.get(client.sessionId);
@@ -42,11 +47,18 @@ class PigRoom extends Room {
       if (!m || typeof m !== 'object' || !str(m.t)) return;
       const from = client.sessionId;
       switch (m.t) {
+        case 'grap_fire':
         case 'hook_fire':
           if (str(m.id) && vec3(m.o) && vec3(m.d)) this.relay(client, { t: m.t, id: m.id, o: m.o, d: m.d });
           break;
         case 'hook_upd':
           if (str(m.id) && (m.s === 'attach' || m.s === 'back')) this.relay(client, { t: m.t, id: m.id, s: m.s, tgt: str(m.tgt) ? m.tgt : undefined });
+          break;
+        case 'grap_upd':
+          if (str(m.id) && ['attach', 'anchor', 'back'].includes(m.s)) this.relay(client, { t: m.t, id: m.id, s: m.s, tgt: str(m.tgt) ? m.tgt : undefined, a: vec3(m.a) ? m.a : undefined });
+          break;
+        case 'grab':
+          this.onGrab(client);
           break;
         case 'hook_hit':
           if (str(m.id) && str(m.to) && this.near(from, m.to, HOOK_REACH)) {
@@ -78,6 +90,21 @@ class PigRoom extends Room {
           break;
       }
     });
+  }
+
+  spawnPickup() {
+    const a = Math.random() * Math.PI * 2, r = INNER + 1.6 + Math.random() * (OUTER_R - 1.8 - INNER - 1.6);
+    const pk = this.state.pickup;
+    pk.x = Math.cos(a) * r; pk.z = Math.sin(a) * r; pk.active = true;
+  }
+
+  onGrab(client) {
+    const pk = this.state.pickup, p = this.state.players.get(client.sessionId);
+    if (!pk.active || !p || p.anim === 3 || Math.hypot(p.x - pk.x, p.z - pk.z) > PICKUP_REACH) return;
+    pk.active = false; // first come, first served
+    client.send('ev', { t: 'grab_ok' });
+    this.broadcast('ev', { t: 'grabbed', from: client.sessionId }, { except: client });
+    this.clock.setTimeout(() => this.spawnPickup(), PICKUP_RESPAWN_MS);
   }
 
   relay(client, msg, toId) {

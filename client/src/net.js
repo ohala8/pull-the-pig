@@ -62,14 +62,17 @@ export function createNet(ctx) {
   function onEvent(m) {
     if (!m || typeof m !== 'object') return;
     const from = remotes.get(m.from);
-    if (m.t === 'hook_fire' && from) {
+    if ((m.t === 'hook_fire' || m.t === 'grap_fire') && from) {
+      const grap = m.t === 'grap_fire';
       hooks.set(m.id, {
-        id: m.id, from: m.from, phase: 'out', pos: new V3(...m.o), prev: new V3(...m.o),
-        dir: new V3(...m.d).normalize(), dist: 0, tgt: null, age: 0, vis: ctx.makeHookVis()
+        kind: grap ? 'grap' : 'hook', id: m.id, from: m.from, phase: 'out', pos: new V3(...m.o), prev: new V3(...m.o),
+        dir: new V3(...m.d).normalize(), dist: 0, tgt: null, age: 0, vis: grap ? ctx.makeGrappleVis() : ctx.makeHookVis()
       });
-    } else if (m.t === 'hook_upd') {
+    } else if (m.t === 'hook_upd' || m.t === 'grap_upd') {
       const h = hooks.get(m.id); if (!h) return;
-      if (m.s === 'attach') { h.phase = 'attached'; h.tgt = m.tgt; } else h.phase = 'back';
+      if (m.s === 'attach') { if (m.tgt) { h.phase = 'attached'; h.tgt = m.tgt; } else h.phase = 'anchored'; }
+      else if (m.s === 'anchor' && Array.isArray(m.a)) { h.phase = 'anchored'; h.pos.set(...m.a); }
+      else h.phase = 'back';
     }
     const fn = handlers[m.t]; if (fn) fn(m, from);
   }
@@ -79,6 +82,7 @@ export function createNet(ctx) {
     get myId() { return room ? room.sessionId : null; },
     count: () => (room ? remotes.size + 1 : 0),
     proxies: () => [...remotes.values()],
+    pickup: () => (room && room.state.pickup) || null,
     incoming: () => [...hooks.values()],
     nameOf(id) { if (!room) return '?'; if (id === room.sessionId) return 'You'; const p = room.state.players.get(id); return p ? p.name : 'Someone'; },
     on(t, fn) { handlers[t] = fn; },

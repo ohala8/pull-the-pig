@@ -353,7 +353,7 @@ function newPig(name, isPlayer, i) {
   const p = {
     name, isPlayer, pos: new V3(), vel: new V3(), yaw: 0, pitch: 0, onGround: false, state: 'dead',
     hookCd: 0, breathCd: 0, stunT: 0, protect: 0, respawnT: 0, kills: 0, lastHooker: null, lastHookT: -99,
-    hook: null, pull: null, walk: 0, meleeT: 0, meleeHit: false, knockT: 0, ai: { thinkT: 0, tgt: null, aimT: 0, goal: new V3(), goalT: 0, save: undefined, saveT: 0 }
+    hook: null, pull: null, walk: 0, hasGrapple: false, grapple: null, zipping: false, meleeT: 0, meleeHit: false, knockT: 0, ai: { thinkT: 0, tgt: null, aimT: 0, goal: new V3(), goalT: 0, save: undefined, saveT: 0 }
   };
   if (!isPlayer) {
     const m = makePig(SKINS[i % SKINS.length], PANTS[i % PANTS.length]);
@@ -365,7 +365,7 @@ function newPig(name, isPlayer, i) {
 }
 const player = newPig('You', true, 0);
 NAMES.forEach((n, i) => newPig(n, false, i));
-const net = createNet({ scene, makePig, makeTag, makeHookVis, player, SKINS, PANTS, toast, HOOK_SPEED, HOOK_RANGE });
+const net = createNet({ scene, makePig, makeTag, makeHookVis, makeGrappleVis, player, SKINS, PANTS, toast, HOOK_SPEED, HOOK_RANGE });
 
 // ---------- first-person viewmodel ----------
 const vm = new THREE.Group(); camera.add(vm);
@@ -568,7 +568,7 @@ function releasePull(q) {
 }
 function eliminate(v) {
   if (v.state === 'hooked') releasePull(v);
-  v.state = 'dead'; v.respawnT = v.isPlayer ? 3 : 2.5;
+  v.state = 'dead'; v.respawnT = v.isPlayer ? 3 : 2.5; v.grapple = null; v.hasGrapple = false;
   if (v.hook) { const t = v.hook.target; v.hook = null; if (t && t.pull && t.pull.hooker === v) releasePull(t); }
   if (v.mesh) v.mesh.visible = false;
   const k = (v.lastHooker && v.lastHooker !== v && game.T - v.lastHookT < 6 && v.lastHooker.state !== undefined) ? v.lastHooker : null;
@@ -588,7 +588,7 @@ function setR(p, r) { const cr = Math.hypot(p.pos.x, p.pos.z) || 1; p.pos.x *= r
 function stepBody(p, dt, wx, wz, jump) {
   if (p.stunT > 0) { wx = wz = 0; jump = false; }
   const k = p.onGround ? 14 : 3;
-  if (p.knockT <= 0 && (p.onGround || wx || wz)) {
+  if (p.knockT <= 0 && !p.zipping && (p.onGround || wx || wz)) {
     const f = Math.min(1, k * dt);
     p.vel.x += (wx * SPEED - p.vel.x) * f; p.vel.z += (wz * SPEED - p.vel.z) * f;
   }
@@ -601,12 +601,12 @@ function stepBody(p, dt, wx, wz, jump) {
   if (r > OUTER_R - BODY_R) { setR(p, OUTER_R - BODY_R); r = OUTER_R - BODY_R; }
   if (r >= INNER) {
     if (p.pos.y <= 0) { p.pos.y = 0; if (p.vel.y < 0) p.vel.y = 0; p.onGround = true; }
-    const flying = p.knockT > 0 && p.vel.y > 0; // a shoved pig rising off the ground clears the curb
+    const flying = (p.knockT > 0 && p.vel.y > 0) || p.zipping; // a shoved pig rising off the ground clears the curb
     if (!flying && p.pos.y < CURB_H - 0.01 && r < INNER + BODY_R) setR(p, INNER + BODY_R);
   } else if (r >= PIT_R) {
     if (p.pos.y <= CURB_H && oldY >= CURB_H - 0.08) { p.pos.y = CURB_H; if (p.vel.y < 0) p.vel.y = 0; p.onGround = true; }
-    else if (p.pos.y < CURB_H && !(p.knockT > 0 && p.vel.y > 0)) { if (oldR >= INNER - 0.001) setR(p, INNER + BODY_R); else setR(p, PIT_R - BODY_R * 0.5); }
-  } else if (p.pos.y < CURB_H && r > PIT_R - BODY_R * 0.5) setR(p, PIT_R - BODY_R * 0.5);
+    else if (p.pos.y < CURB_H && !(p.knockT > 0 && p.vel.y > 0) && !p.zipping) { if (oldR >= INNER - 0.001) setR(p, INNER + BODY_R); else setR(p, PIT_R - BODY_R * 0.5); }
+  } else if (!p.zipping && p.pos.y < CURB_H && r > PIT_R - BODY_R * 0.5) setR(p, PIT_R - BODY_R * 0.5);
 }
 function stepPull(q, dt) {
   const pl = q.pull, h = pl.hooker; pl.t += dt;
@@ -632,6 +632,7 @@ function botThink(b, dt) {
     if (ai.save === undefined) { ai.save = Math.random() < D.save; ai.saveT = rnd(0.12, 0.45); }
     ai.saveT -= dt; wx = b.pos.x / r; wz = b.pos.z / r;
     if (ai.save && ai.saveT <= 0) breathe(b, wx, wz);
+    if (b.hasGrapple && !b.grapple && ai.saveT <= -0.15 && b.breathCd > 0.5) { const o = center(b); fireGrapple(b, o, new V3(wx * PIT_R, rnd(-0.6, 0.2), wz * PIT_R).sub(o)); }
     b.yaw = Math.atan2(wx, wz);
     return [wx, wz, false];
   }
@@ -664,6 +665,7 @@ function botThink(b, dt) {
     const nearRim = Math.random() < 0.8, a = Math.atan2(b.pos.z, b.pos.x) + rnd(-0.9, 0.9);
     const gr = nearRim ? rnd(INNER + 0.7, INNER + 1.3) : rnd(INNER + 2.5, OUTER_R - 1.5);
     ai.goal.set(Math.cos(a) * gr, 0, Math.sin(a) * gr); ai.goalT = rnd(2, 5);
+    if (pickup.active && !b.hasGrapple && Math.random() < 0.3) { ai.goal.copy(pickup.pos); ai.goalT = 6; }
   }
   const t = ai.tgt;
   const rooted = b.hook && b.hook.phase === 'pull';
@@ -679,6 +681,7 @@ function botThink(b, dt) {
   let face = (wx || wz) ? Math.atan2(wx, wz) : b.yaw;
   if (t && t.state === 'alive') {
     const tc = center(t); face = Math.atan2(tc.x - b.pos.x, tc.z - b.pos.z);
+    if (b.hasGrapple && !b.grapple && b.onGround && tc.distanceTo(center(b)) > 9 && Math.random() < dt * 0.25) fireGrapple(b, center(b), tc.clone().sub(center(b)));
     if (ai.aimT <= 0 && !b.hook && b.hookCd <= 0 && b.stunT <= 0) {
       const good = endInPit(b, t);
       if (good || Math.random() > D.smart) {
@@ -714,6 +717,7 @@ addEventListener('keydown', (e) => {
     }
   }
   if (e.code === 'KeyV') melee(player);
+  if (e.code === 'KeyR' && player.hasGrapple) { const dir = new V3(); camera.getWorldDirection(dir); fireGrapple(player, camera.position.clone().addScaledVector(dir, 0.6), dir); }
   if (e.code === 'KeyE') { const [wx, wz] = moveWish(); breathe(player, wx, wz); }
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -789,6 +793,7 @@ function updateHUD(dt) {
   H.classList.toggle('ready', hc >= 1); B.classList.toggle('ready', bc >= 1);
   H.querySelector('.in').textContent = player.hookCd > 0 ? Math.ceil(player.hookCd) : '⇧';
   B.querySelector('.in').textContent = player.breathCd > 0 ? Math.ceil(player.breathCd) : 'E';
+  const GR = $('grapcd'); GR.hidden = !player.hasGrapple; GR.style.setProperty('--p', '1');
   if (player.state === 'dead') $('dead').querySelector('.sm').textContent = 'Respawning in ' + Math.max(0, player.respawnT).toFixed(1) + 's';
   else $('dead').hidden = true;
   hudT -= dt; if (hudT > 0) return; hudT = 0.2;
@@ -834,7 +839,7 @@ function checkIncomingDeflects() {
   const el = MELEE_T - player.meleeT; if (el < DEFLECT_A || el > DEFLECT_B) return;
   const dc = center(player).addScaledVector(fwd(player), 1.1);
   for (const ch of net.incoming()) {
-    if (ch.phase !== 'out' || deflectedIds.has(ch.id)) continue;
+    if (ch.kind === 'grap' || ch.phase !== 'out' || deflectedIds.has(ch.id)) continue;
     const from = net.proxies().find((r) => r.id === ch.from); if (!from) continue;
     if (segSphere(ch.prev, ch.pos, dc, 1.35)) { ch.phase = 'back'; localDeflect(ch.id, from, ch.pos.clone()); }
   }
@@ -887,6 +892,8 @@ net.on('kill', (m) => {
 });
 net.on('win', (m) => { toast((m.who === net.myId ? 'You win' : m.name + ' wins') + ' the round!', 'k'); if (m.who === net.myId) sfx.kill(); });
 net.on('round', () => toast('New round! Scores reset'));
+net.on('grab_ok', () => grantGrapple(player));
+net.on('grabbed', (m, from) => { sfx.pickup(pickup.pos); toast((from ? from.name : 'Someone') + ' grabbed the grapple'); });
 
 // ---------- flow ----------
 function setPressed(groupId, v) { $(groupId).querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
@@ -912,6 +919,7 @@ async function startGame() {
   if (!game.online && net.room) net.leave();
   D = DIFF[game.diff];
   for (const p of pigs) { p.kills = 0; p.state = 'dead'; p.hook = null; p.pull = null; if (p.mesh) p.mesh.visible = false; }
+  resetPickup();
   game.state = 'playing';
   for (const p of pigs) { if (!p.isPlayer && (game.online || (game.practice && p !== pigs[1]))) { p.respawnT = Infinity; continue; } spawn(p); }
   $('feed').innerHTML = ''; $('toasts').innerHTML = '';
@@ -974,6 +982,169 @@ $('hdone').addEventListener('click', () => { $('howto').hidden = true; try { loc
 applySettings();
 try { if (!localStorage.getItem('ptp-seen-howto')) openHowto(); } catch (e) { openHowto(); }
 
+// ---------- grapple hook power-up ----------
+// One glowing claw sits somewhere on the plaza. Walk into it to pick it up, then press R once:
+// it zips you to whatever terrain it hits, or to the pig it hits. One use, same range as the chain hook.
+const GRAPPLE_RANGE = HOOK_RANGE, GRAPPLE_SPEED = 55, ZIP_SPEED = 24, PICKUP_RESPAWN = 15, PICKUP_R = 1.5, WALL_TOP = 9;
+const GRAP_COLOR = 0x4fd1ff;
+const ropeGeo = new THREE.CylinderGeometry(0.035, 0.035, 1, 5); ropeGeo.translate(0, 0.5, 0);
+const ropeMat = lam(0xc8a26a, { emissive: 0x2a1c0a });
+const clawMat = lam(0x6f7c86, { emissive: 0x0b1a24 });
+function makeClaw(scale, mat) {
+  const g = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * scale, 0.07 * scale, 0.36 * scale, 8), mat);
+  shaft.rotation.x = Math.PI / 2; g.add(shaft);
+  for (let i = 0; i < 3; i++) {
+    const arm = new THREE.Group(); arm.rotation.z = (i / 3) * Math.PI * 2;
+    const prong = new THREE.Mesh(new THREE.ConeGeometry(0.045 * scale, 0.32 * scale, 5), mat);
+    prong.position.set(0, 0.1 * scale, 0.2 * scale); prong.rotation.x = Math.PI / 2 - 0.7;
+    arm.add(prong); g.add(arm);
+  }
+  return g;
+}
+function makeGrappleVis() {
+  const chain = new THREE.Mesh(ropeGeo, ropeMat); chain.visible = false; scene.add(chain);
+  const head = makeClaw(1, clawMat); head.visible = false; scene.add(head);
+  return { chain, head };
+}
+// the pickup on the map
+const pickup = { active: false, pos: new V3(), timer: 3 };
+const pickupG = new THREE.Group(); pickupG.visible = false; scene.add(pickupG);
+const pickupClaw = makeClaw(2.4, lam(GRAP_COLOR, { emissive: 0x1a6f8f })); pickupClaw.position.y = 1.3; pickupG.add(pickupClaw);
+{
+  const add = { transparent: true, blending: THREE.AdditiveBlending, depthWrite: false };
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 7, 10, 1, true), new THREE.MeshBasicMaterial(Object.assign({ color: GRAP_COLOR, opacity: 0.28, side: THREE.DoubleSide }, add)));
+  beam.position.y = 3.5; pickupG.add(beam);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.25, 40), new THREE.MeshBasicMaterial(Object.assign({ color: GRAP_COLOR, opacity: 0.55 }, add)));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; pickupG.add(ring);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial(Object.assign({ map: puffTex, color: GRAP_COLOR, opacity: 0.6 }, add)));
+  glow.position.y = 1.3; glow.scale.setScalar(2.6); pickupG.add(glow);
+}
+sfx.grapThrow = (p) => { const v = vol(p); hiss(0.25, 0.3 * v, 2000, 5200); tone(480, 0.15, 'triangle', 0.08 * v, 1500); };
+sfx.grapHit = (p) => { const v = vol(p); tone(950, 0.12, 'square', 0.07 * v, 380); hiss(0.1, 0.3 * v, 3200, 1400); };
+sfx.pickup = (p) => { const v = vol(p); [660, 880, 1320].forEach((f, i) => tone(f, 0.2, 'triangle', 0.16 * v, null, i * 0.07)); };
+function placePickup(x, z) { pickup.active = true; pickup.pos.set(x, 0, z); pickupG.position.set(x, 0, z); pickupG.visible = true; }
+function hidePickup() { pickup.active = false; pickupG.visible = false; }
+function randomPickupSpot() { const a = rnd(0, Math.PI * 2), r = rnd(INNER + 1.6, OUTER_R - 1.8); return [Math.cos(a) * r, Math.sin(a) * r]; }
+function resetPickup() { hidePickup(); pickup.timer = 3; for (const p of pigs) { p.hasGrapple = false; p.grapple = null; } }
+function grantGrapple(p) {
+  p.hasGrapple = true; sfx.pickup(p.pos);
+  puff(p.pos.clone().add(new V3(0, 1.2, 0)), GRAP_COLOR, 8, 1.2);
+  if (p.isPlayer) toast('Grapple hook! Press R', 'k');
+}
+let grabAskT = 0;
+function updatePickup(dt) {
+  if (net.room) {
+    const s = net.pickup();
+    if (s && s.active) { if (!pickup.active || pickup.pos.x !== s.x || pickup.pos.z !== s.z) placePickup(s.x, s.z); }
+    else if (pickup.active) hidePickup();
+    if (pickup.active && game.state === 'playing' && player.state === 'alive' && !player.hasGrapple && !player.grapple &&
+        Math.hypot(player.pos.x - pickup.pos.x, player.pos.z - pickup.pos.z) < PICKUP_R && player.pos.y < 2 && performance.now() > grabAskT) {
+      grabAskT = performance.now() + 800; net.send('grab', {});
+    }
+    return;
+  }
+  if (!pickup.active) { pickup.timer -= dt; if (pickup.timer <= 0) { const [x, z] = randomPickupSpot(); placePickup(x, z); } return; }
+  for (const p of pigs) {
+    if (p.state !== 'alive' || p.hasGrapple || p.grapple) continue;
+    if (Math.hypot(p.pos.x - pickup.pos.x, p.pos.z - pickup.pos.z) < PICKUP_R && p.pos.y < 2) {
+      hidePickup(); pickup.timer = PICKUP_RESPAWN; grantGrapple(p); break;
+    }
+  }
+}
+function fireGrapple(p, origin, dir) {
+  if (!p.hasGrapple || p.grapple || p.state !== 'alive' || p.stunT > 0) return;
+  p.hasGrapple = false;
+  p.grapple = { phase: 'out', pos: origin.clone(), prev: origin.clone(), dir: dir.clone().normalize(), dist: 0, goal: null, target: null, t: 0, id: null };
+  sfx.grapThrow(origin);
+  if (p.isPlayer && net.room) { p.grapple.id = net.newHookId(); net.send('grap_fire', { id: p.grapple.id, o: origin.toArray(), d: p.grapple.dir.toArray() }); }
+}
+// What did the claw hit? Returns where it stuck and where your feet should end up.
+function terrainHit(prev, pos) {
+  const r = Math.hypot(pos.x, pos.z) || 1e-6, pr = Math.hypot(prev.x, prev.z);
+  const ux = pos.x / r, uz = pos.z / r;
+  const at = (rr, y) => new V3(ux * rr, y, uz * rr);
+  // grabbing the pit wall from inside the pit pulls you up onto the rim above it
+  if (pr < PIT_R && r >= PIT_R && pos.y < CURB_H) return { at: at(PIT_R, Math.min(pos.y, CURB_H)), goal: at(PIT_R + CURB_W * 0.5, CURB_H + 0.6) };
+  if (r >= OUTER_R + 0.55 && pos.y > 0 && pos.y < WALL_TOP) return { at: at(OUTER_R + 0.55, pos.y), goal: at(OUTER_R - 0.9, Math.max(0.75, pos.y - 1.3)) };
+  if (r >= INNER && pos.y <= 0) return { at: at(r, 0), goal: at(Math.min(r, OUTER_R - 0.9), 0.7) };
+  if (r >= PIT_R && r < INNER && pos.y <= CURB_H) {
+    if (prev.y > CURB_H) return { at: at(r, CURB_H), goal: at(r, CURB_H + 0.6) };
+    if (pr >= INNER) return { at: at(INNER, Math.max(0, pos.y)), goal: at(INNER + 0.9, 0.7) };
+  }
+  return null;
+}
+function endZip(p) {
+  const g = p.grapple; if (!g) return;
+  p.vel.multiplyScalar(g.target ? 0.06 : 0.4); p.vel.y = Math.max(p.vel.y, 2.5);
+  p.onGround = false; p.knockT = 0.2;
+  g.phase = 'back'; g.goal = null;
+}
+function stepGrapple(p, dt) {
+  const g = p.grapple; g.t += dt;
+  let goal;
+  if (g.target) { if (g.target.state === 'dead') return endZip(p); goal = g.target.pos.clone(); }
+  else goal = g.goal;
+  const d = goal.clone().sub(p.pos), L = d.length();
+  const stopAt = g.target ? 1.9 : 0.6; // stop just in front of a pig, right on a spot
+  if (L <= stopAt || g.t > 1.8 || p.stunT > 0) { endZip(p); stepBody(p, dt, 0, 0, false); return; }
+  d.divideScalar(L);
+  p.zipping = true;
+  p.vel.copy(d).multiplyScalar(Math.min(ZIP_SPEED, (L - stopAt + 0.05) / dt));
+  p.vel.y += G * dt; // cancel gravity while the rope pulls
+  stepBody(p, dt, 0, 0, false);
+  p.zipping = false;
+  if (!p.isPlayer) p.yaw = Math.atan2(d.x, d.z);
+}
+function updateGrapples(dt) {
+  for (const p of pigs) {
+    const g = p.grapple; if (!g) continue;
+    if (p.state === 'dead') { p.grapple = null; continue; }
+    if (p.state === 'hooked' && g.phase !== 'back') g.phase = 'back';
+    const ph0 = g.phase;
+    if (g.phase === 'out') {
+      g.prev.copy(g.pos); const step = GRAPPLE_SPEED * dt; g.pos.addScaledVector(g.dir, step); g.dist += step;
+      let hit = null;
+      const cands = p.isPlayer && net.room ? pigs.concat(net.proxies()) : pigs;
+      for (const q of cands) {
+        if (q === p || q.state === 'dead' || q.protect > 0) continue;
+        if (segSphere(g.prev, g.pos, new V3(q.pos.x, q.pos.y + 0.9, q.pos.z), 1.0) || segSphere(g.prev, g.pos, new V3(q.pos.x, q.pos.y + 2.1, q.pos.z), 0.95)) { hit = q; break; }
+      }
+      if (hit) {
+        g.phase = 'pull'; g.target = hit; sfx.grapHit(hit.pos);
+        if (p.isPlayer) toast('Zipping to ' + hit.name);
+        if (g.id && net.room) net.send('grap_upd', { id: g.id, s: 'attach', tgt: hit.isRemote ? hit.id : undefined });
+      } else {
+        const th = terrainHit(g.prev, g.pos);
+        if (th) {
+          g.phase = 'pull'; g.pos.copy(th.at); g.goal = th.goal; sfx.grapHit(th.at);
+          puff(th.at.clone(), 0xd8c4a0, 4, 0.6);
+          if (g.id && net.room) net.send('grap_upd', { id: g.id, s: 'anchor', a: th.at.toArray() });
+        } else if (g.dist > GRAPPLE_RANGE) g.phase = 'back';
+      }
+    } else if (g.phase === 'pull' && g.target) center(g.target, g.pos);
+    if (ph0 !== 'back' && g.phase === 'back' && g.id && net.room) net.send('grap_upd', { id: g.id, s: 'back' });
+    if (g.phase === 'back') {
+      const hand = handPos(p), d = hand.sub(g.pos), L = d.length(), s = 80 * dt;
+      if (L <= s) p.grapple = null; else g.pos.addScaledVector(d.divideScalar(L), s);
+    }
+  }
+}
+function drawGrapples(t) {
+  for (const p of pigs) {
+    if (!p.gvis) p.gvis = makeGrappleVis();
+    const v = p.gvis, g = p.grapple;
+    if (!g || p.state === 'dead') { v.chain.visible = v.head.visible = false; continue; }
+    const hand = handPos(p), d = g.pos.clone().sub(hand), L = d.length();
+    v.chain.visible = v.head.visible = true;
+    v.chain.position.copy(hand); v.chain.scale.set(1, Math.max(0.01, L), 1);
+    if (L > 0.001) v.chain.quaternion.setFromUnitVectors(new V3(0, 1, 0), d.clone().divideScalar(L));
+    v.head.position.copy(g.pos);
+    v.head.lookAt(g.pos.clone().add(g.phase === 'out' ? g.dir : g.phase === 'back' ? d.clone().negate() : d));
+  }
+  if (pickupG.visible) { pickupClaw.rotation.y = t * 1.6; pickupClaw.position.y = 1.3 + Math.sin(t * 2.2) * 0.18; }
+}
+
 // ---------- main loop ----------
 function update(dt) {
   game.T += dt;
@@ -985,6 +1156,7 @@ function update(dt) {
     p.hookCd -= dt; p.breathCd -= dt; p.stunT -= dt; p.protect -= dt; p.knockT -= dt;
     if (p.meleeT > 0) { p.meleeT -= dt; if (!p.meleeHit && MELEE_T - p.meleeT >= MELEE_HIT && p.state === 'alive') { p.meleeHit = true; meleeStrike(p); } }
     if (p.state === 'hooked') stepPull(p, dt);
+    else if (p.grapple && p.grapple.phase === 'pull') stepGrapple(p, dt);
     else {
       let w;
       if (p.isPlayer) { const [x, z] = moveWish(); w = [x, z, !!keys.Space]; }
@@ -1026,6 +1198,8 @@ function update(dt) {
       if (L <= s) p.hook = null; else h.pos.addScaledVector(d.divideScalar(L), s);
     }
   }
+  updateGrapples(dt);
+  updatePickup(dt);
   // pig-to-pig separation
   for (let i = 0; i < pigs.length; i++) for (let j = i + 1; j < pigs.length; j++) {
     const a = pigs[i], b = pigs[j];
@@ -1069,6 +1243,7 @@ function syncVisuals(dt, t) {
     f.s.position.addScaledVector(f.v, dt); const k = 1 - f.life / f.max;
     f.s.scale.setScalar(f.size * (1 + k * 1.6)); f.s.material.opacity = 0.7 * (1 - k);
   }
+  drawGrapples(t);
   const pulse = 0.75 + Math.sin(t * 3) * 0.25;
   glowMat.color.setRGB(0.49 * pulse + 0.2, 1 * pulse, 0.29 * pulse);
   for (const m of barrierMats) m.map.offset.y = (t * 0.15) % 1;

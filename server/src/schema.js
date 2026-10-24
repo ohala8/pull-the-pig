@@ -26,12 +26,24 @@ defineTypes(Player, {
   kills: 'uint16'
 });
 
+// The grapple hook power-up lying on the plaza (one at a time).
+class Pickup extends Schema {
+  constructor() {
+    super();
+    this.active = false;
+    this.x = 0;
+    this.z = 0;
+  }
+}
+defineTypes(Pickup, { active: 'boolean', x: 'float32', z: 'float32' });
+
 class PigState extends Schema {
   constructor() {
     super();
     this.players = new MapSchema();
+    this.pickup = new Pickup();
   }
 }
-defineTypes(PigState, { players: { map: Player } });
+defineTypes(PigState, { players: { map: Player }, pickup: Pickup });
 
-module.exports = { Player, PigState };
+module.exports = { Player, Pickup, PigState };
